@@ -1,0 +1,21 @@
+[package]
+name = "mnemonic-to-fvks"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+bip39 = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+clap_derive = { workspace = true }
+dotenvy = { workspace = true }
+eyre = { workspace = true }
+hex = { workspace = true }
+orchard = { workspace = true }
+rpassword = { workspace = true }
+sapling-crypto = { workspace = true }
+zcash_primitives = { workspace = true }
+zeroize = { workspace = true }
+zip32 = { workspace = true }
+
+[lints]
+workspace = true
