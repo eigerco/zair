@@ -34,7 +34,12 @@
           # nix
           nixfmt-rfc-style.enable = true;
           flake-checker.enable = true;
-          statix.enable = true;
+          statix = {
+            enable = true;
+            settings = {
+              ignore = [ ".direnv" ];
+            };
+          };
 
           # Rust
           cargo-check = {
@@ -83,6 +88,10 @@
               # This regex matches strings with 16+ alphanumeric chars (adjust as needed)
               # See: https://github.com/crate-ci/typos#configuration
               default.extend-ignore-re = [ "([a-zA-Z0-9]{16,})" ];
+              default.extend-words = {
+                groth = "groth";
+                Groth = "Groth";
+              };
             };
           };
 
