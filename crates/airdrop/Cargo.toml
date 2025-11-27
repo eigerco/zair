@@ -1,25 +1,22 @@
 [package]
-name = "zcash-notes-proof"
+name = "airdrop"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["derive", "env"] }
 dotenvy = { workspace = true }
 eyre = { workspace = true }
-hex = { workspace = true }
-light-wallet-api = { workspace = true }
-orchard = { workspace = true }
-prost = { workspace = true }
+futures = { workspace = true }
+non-membership-proofs = { workspace = true }
+rs_merkle = { workspace = true }
 rustls = { workspace = true, features = ["ring"] }
-sapling-crypto = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
-tonic = { workspace = true, features = ["tls-webpki-roots"] }
-tonic-prost = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
-zcash_note_encryption = { workspace = true }
 zcash_primitives = { workspace = true }
 
-[package.metadata.cargo-machete]
-ignored = ["prost", "tonic-prost"]
+[lints]
+workspace = true

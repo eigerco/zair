@@ -1,3 +1,5 @@
+//! Build script to compile protobuf definitions for the Zcash light wallet API.
+
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,19 +19,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let service = proto_dir.join("service.proto");
 
     // Validate that proto files exist
-    if !compact_formats.exists() {
+    let missing_files: Vec<_> = [&compact_formats, &service]
+        .iter()
+        .filter_map(|path| (!path.exists()).then_some(path.display().to_string()))
+        .collect();
+
+    if !missing_files.is_empty() {
         return Err(format!(
-            "Proto file not found: {}. Did you run 'git submodule update --init'?",
-            compact_formats.display()
-        )
-        .into());
-    }
-    if !service.exists() {
-        return Err(format!(
-            "Proto file not found: {}. Did you run 'git submodule update --init'?",
-            service.display()
-        )
-        .into());
+            "The build script could not find the required proto file(s): {}. Has 'git submodule update --init' been run?",
+            missing_files.join(", ")
+        ).into());
     }
 
     tonic_prost_build::configure()

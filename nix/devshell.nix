@@ -26,6 +26,7 @@
         # General development tools
         git
         protobuf
+        typos
       ];
 
       # Documentation generation tools

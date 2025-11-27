@@ -21,3 +21,8 @@ The workspace is also using pre-commit checks. These can be removed if they prov
 ### zcash-notes-proof
 
 - **Description**: Searches the Zcash network for user notes. It uses the `lightwalletd` protocol to search for the notes. Run with `--help` to check the usage. The `zcash-notes-proof` is using the GRPC client to connect with `lightwalletd` and queries the chain.
+
+
+### TODO
+
+Describe all the tools present in the PR

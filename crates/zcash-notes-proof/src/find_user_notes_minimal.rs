@@ -2,6 +2,10 @@
 ///
 /// This is a standalone module that scans Zcash blocks for user notes.
 use eyre::{Result, WrapErr as _};
+use light_wallet_api::compact_tx_streamer_client::CompactTxStreamerClient;
+use light_wallet_api::{
+    BlockId, BlockRange, CompactOrchardAction, CompactSaplingOutput, TreeState,
+};
 use orchard::keys::{
     FullViewingKey as OrchardFvk, PreparedIncomingViewingKey as OrchardPivk, Scope,
 };
@@ -16,11 +20,6 @@ use tracing::{debug, error, info};
 use zcash_note_encryption::{EphemeralKeyBytes, try_compact_note_decryption};
 use zcash_primitives::consensus::Network;
 use zcash_primitives::transaction::components::sapling::zip212_enforcement;
-
-use crate::light_wallet_api::compact_tx_streamer_client::CompactTxStreamerClient;
-use crate::light_wallet_api::{
-    BlockId, BlockRange, CompactOrchardAction, CompactSaplingOutput, TreeState,
-};
 
 /// A note found for the user, with metadata
 #[derive(Debug, Clone)]
@@ -587,8 +586,6 @@ pub fn derive_sapling_nullifier(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_nullifier_is_deterministic() {
         // This test verifies that deriving a nullifier multiple times

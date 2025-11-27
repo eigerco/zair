@@ -1,0 +1,27 @@
+[package]
+name = "non-membership-proofs"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+async-stream = { workspace = true }
+bytemuck = { workspace = true }
+futures = { workspace = true }
+futures-core = { workspace = true }
+hex = { workspace = true }
+light-wallet-api = { workspace = true }
+rs_merkle = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "macros",
+  "fs",
+  "io-util",
+] }
+tonic = { workspace = true, features = ["tls-webpki-roots"] }
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tonic-prost-build = "0.14.2"

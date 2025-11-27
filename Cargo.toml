@@ -6,24 +6,43 @@ members = ["crates/*"]
 edition = "2024"
 
 [workspace.dependencies]
+light-wallet-api = { path = "crates/light-wallet-api" }
+mnemonic-to-fvks = { path = "crates/mnemonic-to-fvks" }
+non-membership-proofs = { path = "crates/non-membership-proofs" }
+zcash-notes-proof = { path = "crates/zcash-notes-proof" }
+
+async-stream = "0.3.6"
 bip39 = "2.2.0"
+bytemuck = "1.24.0"
 clap = "4.5.51"
 clap_derive = "4.5.49"
 config = { version = "0.15.19", default-features = false }
-serde = { version = "1.0", features = ["derive"] }
 dotenvy = "0.15.7"
 eyre = "0.6.12"
+futures = "0.3.31"
+futures-core = "0.3.31"
 hex = "0.4"
-mnemonic-to-fvks = { path = "crates/mnemonic-to-fvks" }
 orchard = "0.11.0"
+prost = "0.14.1"
 rpassword = "7.4.0"
+rs_merkle = "1.5.0"
+rustls = "0.23.35"
 sapling-crypto = "0.5.0"
+serde = "1"
+serde_json = "1"
+sha2 = "0.10"
+sled = "0.34.7"
+thiserror = "2.0.17"
+tokio = "1.48.0"
+tonic = "0.14.2"
+tonic-prost = "0.14.2"
+tonic-prost-build = "0.14.2"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
+zcash_note_encryption = "0.4"
 zcash_primitives = "0.26.1"
 zeroize = "1.8.2"
 zip32 = "0.2.1"
-zcash-notes-proof = { path = "crates/zcash-notes-proof" }
 
 [workspace.lints.clippy]
 absolute_paths = "allow"

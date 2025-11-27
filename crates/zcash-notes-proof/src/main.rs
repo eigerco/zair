@@ -1,140 +1,43 @@
-use std::io::Cursor;
-
-use clap::Parser;
+use clap::Parser as _;
 use eyre::{Result, WrapErr as _, eyre};
+use light_wallet_api::ChainSpec;
+use light_wallet_api::compact_tx_streamer_client::CompactTxStreamerClient;
 use orchard::keys::FullViewingKey as OrchardFvk;
 use sapling_crypto::keys::FullViewingKey as SaplingFvk;
 use tonic::Request;
 use tonic::transport::Endpoint;
 use tracing::{debug, info};
-use zcash_notes_proof::light_wallet_api::ChainSpec;
-use zcash_notes_proof::light_wallet_api::compact_tx_streamer_client::CompactTxStreamerClient;
 use zcash_notes_proof::{
     FoundNote, collect_spent_nullifiers, derive_orchard_nullifier, derive_sapling_nullifier,
     find_user_notes,
 };
-use zcash_primitives::consensus::Network;
 
-#[derive(Parser)]
-#[command(name = "zcash-notes-proof")]
-#[command(about = "Find Zcash notes using lightwalletd")]
-struct Cli {
-    /// Network type (mainnet or testnet)
-    #[arg(long, env = "NETWORK", default_value = "testnet", value_parser = parse_network)]
-    network: Network,
-
-    /// Lightwalletd server URL (overrides default for network)
-    #[arg(short = 'u', long, env = "LIGHTWALLETD_URL")]
-    lightwalletd_url: Option<String>,
-
-    /// Orchard Full Viewing Key (hex-encoded, 96 bytes)
-    #[arg(short = 'o', long, env = "ORCHARD_FVK", value_parser = parse_orchard_fvk)]
-    orchard_fvk: OrchardFvk,
-
-    /// Sapling Full Viewing Key (hex-encoded, 96 bytes)
-    #[arg(short = 's', long, env = "SAPLING_FVK", value_parser = parse_sapling_fvk)]
-    sapling_fvk: SaplingFvk,
-
-    /// Start block height
-    #[arg(long, env = "START_HEIGHT")]
-    start_height: u64,
-
-    /// End block height (optional - defaults to current chain tip)
-    #[arg(long, env = "END_HEIGHT")]
-    end_height: Option<u64>,
-}
-
-impl Cli {
-    fn network_config(&self) -> NetworkConfig {
-        let lightwalletd_url = self
-            .lightwalletd_url
-            .clone()
-            .unwrap_or_else(|| NetworkConfig::default_url(&self.network).to_string());
-
-        NetworkConfig {
-            network: self.network,
-            lightwalletd_url,
-        }
-    }
-}
-
-/// Network configuration with default lightwalletd endpoints
-#[derive(Clone)]
-struct NetworkConfig {
-    network: Network,
-    lightwalletd_url: String,
-}
-
-impl NetworkConfig {
-    fn default_url(network: &Network) -> &'static str {
-        match network {
-            Network::MainNetwork => "https://zec.rocks:443",
-            Network::TestNetwork => "https://testnet.zec.rocks:443",
-        }
-    }
-}
-
-fn parse_network(s: &str) -> Result<Network> {
-    match s {
-        "mainnet" => Ok(Network::MainNetwork),
-        "testnet" => Ok(Network::TestNetwork),
-        other => Err(eyre!(
-            "Invalid network type: {other}. Expected 'mainnet' or 'testnet'.",
-        )),
-    }
-}
-
-/// Parse hex-encoded Orchard Full Viewing Key
-fn parse_orchard_fvk(hex: &str) -> Result<OrchardFvk> {
-    let bytes = hex::decode(hex).wrap_err("Failed to decode Orchard FVK from hex string")?;
-
-    let bytes: [u8; 96] = bytes.try_into().map_err(|v: Vec<u8>| {
-        eyre!(
-            "Invalid Orchard FVK length: expected 96 bytes, got {} bytes",
-            v.len()
-        )
-    })?;
-
-    OrchardFvk::from_bytes(&bytes)
-        .ok_or_else(|| eyre!("Invalid Orchard FVK: failed to parse 96-byte representation"))
-}
-
-/// Parse hex-encoded Sapling Full Viewing Key
-fn parse_sapling_fvk(hex: &str) -> Result<SaplingFvk> {
-    let bytes = hex::decode(hex).wrap_err("Failed to decode Sapling FVK from hex string")?;
-
-    if bytes.len() != 96 {
-        return Err(eyre!(
-            "Invalid Sapling FVK length: expected 96 bytes, got {} bytes",
-            bytes.len()
-        ));
-    }
-
-    SaplingFvk::read(&mut Cursor::new(bytes))
-        .wrap_err("Invalid Sapling FVK: failed to parse 96-byte representation")
-}
-
-/// Get the current blockchain tip height from lightwalletd
-async fn get_latest_block_height(
-    client: &mut CompactTxStreamerClient<tonic::transport::Channel>,
-) -> Result<u64> {
-    let response = client
-        .get_latest_block(Request::new(ChainSpec {}))
-        .await
-        .wrap_err("Failed to get latest block from lightwalletd")?;
-
-    let block = response.into_inner();
-
-    Ok(block.height)
-}
+mod cli;
+use crate::cli::*;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .env file (fails silently if not found)
-    dotenvy::dotenv().ok();
+    if let Err(e) = dotenvy::dotenv() {
+        eprintln!("Note: .env file not loaded: {}", e);
+    } else {
+        eprintln!("Loaded .env file");
+    }
+
+    // Debug: show current RUST_LOG setting
+    if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        eprintln!("RUST_LOG is set to: {}", rust_log);
+    } else {
+        eprintln!("RUST_LOG is not set, using default: info");
+    }
 
     // Initialize logging
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
 
     // Initialize rustls crypto provider
     rustls::crypto::ring::default_provider()
@@ -233,6 +136,20 @@ fn txid_to_hex(txid: &[u8]) -> String {
     hex::encode(reversed)
 }
 
+/// Get the current blockchain tip height from lightwalletd
+async fn get_latest_block_height(
+    client: &mut CompactTxStreamerClient<tonic::transport::Channel>,
+) -> Result<u64> {
+    let response = client
+        .get_latest_block(Request::new(ChainSpec {}))
+        .await
+        .wrap_err("Failed to get latest block from lightwalletd")?;
+
+    let block = response.into_inner();
+
+    Ok(block.height)
+}
+
 fn display_results(
     notes: &[FoundNote],
     orchard_fvk: &OrchardFvk,
@@ -312,12 +229,6 @@ fn display_results(
     println!(
         "Unspent notes:     {} ({:.8} ZEC)",
         unspent_count,
-        unspent_value as f64 / 100_000_000.0
-    );
-    println!();
-    println!(
-        "UNSPENT VALUE:     {} zatoshis ({:.8} ZEC)",
-        unspent_value,
         unspent_value as f64 / 100_000_000.0
     );
     println!();
