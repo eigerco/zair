@@ -1,6 +1,6 @@
 //! Command-line interface for airdrop cli application
 
-use std::ops::Range;
+use std::ops::RangeInclusive;
 
 use clap::Parser;
 use eyre::{Result, eyre};
@@ -41,9 +41,9 @@ pub(crate) struct CommonArgs {
     #[arg(long, env = "NETWORK", default_value = "testnet", value_parser = parse_network)]
     pub network: Network,
 
-    /// Block range for the snapshot (e.g., 1000000..1100000)
+    /// Block range for the snapshot (e.g., 1000000..=1100000). Range is inclusive.
     #[arg(long, env = "SNAPSHOT", value_parser = parse_range)]
-    pub snapshot: Range<u64>,
+    pub snapshot: RangeInclusive<u64>,
 
     #[command(flatten)]
     pub source: SourceArgs,
@@ -106,11 +106,11 @@ impl TryFrom<SourceArgs> for Source {
     }
 }
 
-fn parse_range(s: &str) -> Result<Range<u64>> {
+fn parse_range(s: &str) -> Result<RangeInclusive<u64>> {
     let (start, end) = s
         .split_once("..")
         .ok_or_else(|| eyre!("Invalid range format. Use START..END"))?;
-    Ok(start.parse()?..end.parse()?)
+    Ok(start.parse()?..=end.parse()?)
 }
 
 fn parse_network(s: &str) -> Result<Network> {

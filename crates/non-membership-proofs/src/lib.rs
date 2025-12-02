@@ -63,10 +63,11 @@ pub async fn write_raw_nullifiers<P>(notes: &[[u8; 32]], path: P) -> std::io::Re
 where
     P: AsRef<Path>,
 {
-    let file = File::open(path).await?;
+    let file = File::create(path).await?;
     let mut writer = BufWriter::with_capacity(1024 * 1024, file);
 
     writer.write_all(bytemuck::cast_slice(notes)).await?;
+    writer.flush().await?;
 
     Ok(())
 }

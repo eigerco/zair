@@ -17,7 +17,7 @@ pub(crate) async fn get_nullifiers(config: &CommonArgs) -> eyre::Result<Nullifie
     match config.source.clone().try_into()? {
         Source::Lightwalletd { url } => {
             let source =
-                LightWalletd::connect(&url, config.snapshot.start, config.snapshot.end).await?;
+                LightWalletd::connect(&url, *config.snapshot.start(), *config.snapshot.end()).await?;
             Ok(Box::pin(
                 source
                     .into_nullifiers_stream()
