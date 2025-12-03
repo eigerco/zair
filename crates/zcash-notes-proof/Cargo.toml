@@ -12,7 +12,7 @@ light-wallet-api = { workspace = true }
 orchard = { workspace = true }
 prost = { workspace = true }
 rustls = { workspace = true, features = ["ring"] }
-sapling-crypto = { workspace = true }
+sapling = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tonic = { workspace = true, features = ["tls-webpki-roots"] }
 tonic-prost = { workspace = true }

@@ -1,9 +1,12 @@
 //! Command-line interface for airdrop cli application
 
+use std::io::Cursor;
 use std::ops::RangeInclusive;
 
 use clap::Parser;
-use eyre::{Result, eyre};
+use eyre::{Context as _, Result, ensure, eyre};
+use orchard::keys::FullViewingKey as OrchardFvk;
+use sapling::keys::FullViewingKey as SaplingFvk;
 use zcash_primitives::consensus::Network;
 
 #[derive(Debug, Parser)]
@@ -27,12 +30,14 @@ pub(crate) enum Commands {
             default_value = "airdrop_configuration.json"
         )]
         configuration_output_file: String,
+        /// Sapling snapshot nullifiers. This file stores the sapling nullifiers of the snapshot.
         #[arg(
             long,
             env = "SAPLING_SNAPSHOT_NULLIFIERS",
             default_value = "sapling-snapshot-nullifiers.bin"
         )]
         sapling_snapshot_nullifiers: String,
+        /// Orchard snapshot nullifiers. This file stores the orchard nullifiers of the snapshot.
         #[arg(
             long,
             env = "ORCHARD_SNAPSHOT_NULLIFIERS",
@@ -44,6 +49,30 @@ pub(crate) enum Commands {
     FindNotes {
         #[command(flatten)]
         config: CommonArgs,
+        /// Sapling snapshot nullifiers. This file contains the sapling nullifiers of the snapshot.
+        /// Its used to recreate the Merkle tree of the snapshot for sapling notes.
+        #[arg(
+            long,
+            env = "SAPLING_SNAPSHOT_NULLIFIERS",
+            default_value = "sapling-snapshot-nullifiers.bin"
+        )]
+        sapling_snapshot_nullifiers: String,
+        /// Orchard snapshot nullifiers. This file contains the orchard nullifiers of the snapshot.
+        /// Its used to recreate the Merkle tree of the snapshot for orchard notes.
+        #[arg(
+            long,
+            env = "ORCHARD_SNAPSHOT_NULLIFIERS",
+            default_value = "orchard-snapshot-nullifiers.bin"
+        )]
+        orchard_snapshot_nullifiers: String,
+
+        /// Orchard Full Viewing Key (hex-encoded, 96 bytes)
+        #[arg(short = 'o', long, env = "ORCHARD_FVK", value_parser = parse_orchard_fvk)]
+        orchard_fvk: OrchardFvk,
+
+        /// Sapling Full Viewing Key (hex-encoded, 96 bytes)
+        #[arg(short = 's', long, env = "SAPLING_FVK", value_parser = parse_sapling_fvk)]
+        sapling_fvk: SaplingFvk,
     },
 }
 
@@ -133,4 +162,33 @@ fn parse_network(s: &str) -> Result<Network> {
             "Invalid network: {other}. Expected 'mainnet' or 'testnet'."
         )),
     }
+}
+
+/// Parse hex-encoded Orchard Full Viewing Key
+fn parse_orchard_fvk(hex: &str) -> Result<OrchardFvk> {
+    let bytes = hex::decode(hex).wrap_err("Failed to decode Orchard FVK from hex string")?;
+
+    let bytes: [u8; 96] = bytes.try_into().map_err(|v: Vec<u8>| {
+        eyre!(
+            "Invalid Orchard FVK length: expected 96 bytes, got {} bytes",
+            v.len()
+        )
+    })?;
+
+    OrchardFvk::from_bytes(&bytes)
+        .ok_or_else(|| eyre!("Invalid Orchard FVK: failed to parse 96-byte representation"))
+}
+
+/// Parse hex-encoded Sapling Full Viewing Key
+fn parse_sapling_fvk(hex: &str) -> Result<SaplingFvk> {
+    let bytes = hex::decode(hex).wrap_err("Failed to decode Sapling FVK from hex string")?;
+
+    ensure!(
+        bytes.len() == 96,
+        "Invalid Sapling FVK length: expected 96 bytes, got {} bytes",
+        bytes.len()
+    );
+
+    SaplingFvk::read(&mut Cursor::new(bytes))
+        .wrap_err("Invalid Sapling FVK: failed to parse 96-byte representation")
 }

@@ -3,7 +3,7 @@ use std::io::Cursor;
 use clap::Parser;
 use eyre::{Result, WrapErr as _, eyre};
 use orchard::keys::FullViewingKey as OrchardFvk;
-use sapling_crypto::keys::FullViewingKey as SaplingFvk;
+use sapling::keys::FullViewingKey as SaplingFvk;
 use zcash_primitives::consensus::Network;
 
 #[derive(Parser)]

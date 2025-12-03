@@ -40,9 +40,12 @@ dependencies = [
  "dotenvy",
  "eyre",
  "futures",
+ "hex",
  "non-membership-proofs",
+ "orchard",
  "rs_merkle",
  "rustls",
+ "sapling-crypto",
  "serde",
  "serde_json",
  "tokio",
@@ -1414,16 +1417,14 @@ version = "0.1.0"
 dependencies = [
  "bip39",
  "clap",
- "clap_derive",
  "dotenvy",
  "eyre",
  "hex",
- "orchard",
  "rpassword",
- "sapling-crypto",
+ "zcash_keys",
  "zcash_primitives",
+ "zcash_protocol",
  "zeroize",
- "zip32",
 ]
 
 [[package]]
@@ -2075,6 +2076,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4387882333d3aa8cb20530a17c69a3752e97837832f34f6dccc760e715001d9"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
+dependencies = [
+ "zeroize",
 ]
 
 [[package]]
@@ -2903,6 +2913,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "zcash_keys"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c115531caa1b7ca5ccd82dc26dbe3ba44b7542e928a3f77cd04abbe3cde4a4f2"
+dependencies = [
+ "bech32",
+ "blake2b_simd",
+ "bls12_381",
+ "bs58",
+ "core2",
+ "document-features",
+ "group",
+ "memuse",
+ "nonempty",
+ "orchard",
+ "rand_core",
+ "sapling-crypto",
+ "secrecy",
+ "subtle",
+ "tracing",
+ "zcash_address",
+ "zcash_encoding",
+ "zcash_protocol",
+ "zcash_transparent",
+ "zip32",
+]
+
+[[package]]
 name = "zcash_note_encryption"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2964,7 +3002,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "deb4c8d0530fd7a3d65358010f1e0a1ccfe6cc5f1ad63447af089ccc82ae9edf"
 dependencies = [
  "core2",
+ "document-features",
  "hex",
+ "memuse",
 ]
 
 [[package]]

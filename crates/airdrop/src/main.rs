@@ -1,7 +1,9 @@
 //! Airdrop CLI Application
 
 use clap::Parser as _;
-use non_membership_proofs::{build_merkle_tree, partition_by_pool, write_raw_nullifiers};
+use non_membership_proofs::{
+    build_merkle_tree, partition_by_pool, read_raw_nullifiers, write_raw_nullifiers,
+};
 use rs_merkle::algorithms::Sha256;
 use tracing::info;
 
@@ -94,8 +96,33 @@ async fn main() -> eyre::Result<()> {
 
             Ok(())
         }
-        Commands::FindNotes { .. } => {
-            unimplemented!("FindNotes command is not yet implemented");
+        Commands::FindNotes {
+            config: _,
+            sapling_snapshot_nullifiers,
+            orchard_snapshot_nullifiers,
+            orchard_fvk: _,
+            sapling_fvk: _,
+        } => {
+            // TODO: if the sapling or orchard snapshot nullifiers files do not exist,
+            // it should be possible to build them from the chain again.
+            let mut sapling_nullifiers = read_raw_nullifiers(sapling_snapshot_nullifiers).await?;
+            let mut orchard_nullifiers = read_raw_nullifiers(orchard_snapshot_nullifiers).await?;
+
+            let sapling_tree = build_merkle_tree::<Sha256>(&mut sapling_nullifiers);
+            info!(
+                "Built sapling merkle tree with root: {}",
+                sapling_tree.root_hex().unwrap_or_default()
+            );
+
+            let orchard_tree = build_merkle_tree::<Sha256>(&mut orchard_nullifiers);
+            info!(
+                "Built orchard merkle tree with root: {}",
+                orchard_tree.root_hex().unwrap_or_default()
+            );
+
+            // Find user notes logic
+
+            Ok(())
         }
     }
 }

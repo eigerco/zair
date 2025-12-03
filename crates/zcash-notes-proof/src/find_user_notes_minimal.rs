@@ -11,8 +11,8 @@ use orchard::keys::{
 };
 use orchard::note::{ExtractedNoteCommitment, Nullifier};
 use orchard::note_encryption::{CompactAction, OrchardDomain};
-use sapling_crypto::keys::FullViewingKey as SaplingFvk;
-use sapling_crypto::note_encryption::{
+use sapling::keys::FullViewingKey as SaplingFvk;
+use sapling::note_encryption::{
     CompactOutputDescription, PreparedIncomingViewingKey as SaplingPivk, SaplingDomain,
 };
 use tonic::Request;
@@ -31,7 +31,7 @@ pub enum FoundNote {
         scope: Scope,
     },
     Sapling {
-        note: sapling_crypto::Note,
+        note: sapling::Note,
         height: u64,
         txid: Vec<u8>,
         position: u64, // Position in Sapling commitment tree (required for nullifier derivation)
@@ -347,6 +347,7 @@ pub async fn find_user_notes(
                 }
 
                 // Helper to process decryption results
+                // TODO: Check more about Scope
                 let process_orchard = |pivk, scope: Scope| {
                     try_decrypt_orchard_output(pivk, &action)
                         .inspect_err(|e| error!("  Error decrypting with {scope:?} scope: {e}"))
@@ -461,13 +462,13 @@ fn try_decrypt_sapling_output(
     output: &CompactSaplingOutput,
     height: u64,
     network_type: &Network,
-) -> Result<Option<sapling_crypto::Note>> {
+) -> Result<Option<sapling::Note>> {
     // Extract output components
     let cmu_bytes = match output.cmu.as_slice().try_into() {
         Ok(bytes) => bytes,
         Err(_) => return Ok(None),
     };
-    let cmu = sapling_crypto::note::ExtractedNoteCommitment::from_bytes(&cmu_bytes);
+    let cmu = sapling::note::ExtractedNoteCommitment::from_bytes(&cmu_bytes);
     if cmu.is_none().into() {
         return Ok(None);
     }
@@ -565,11 +566,7 @@ pub fn derive_orchard_nullifier(
 /// - rho is derived from the note commitment and the position
 ///
 /// This is what gets revealed on-chain when the note is spent.
-pub fn derive_sapling_nullifier(
-    note: &sapling_crypto::Note,
-    fvk: &SaplingFvk,
-    position: u64,
-) -> [u8; 32] {
+pub fn derive_sapling_nullifier(note: &sapling::Note, fvk: &SaplingFvk, position: u64) -> [u8; 32] {
     // Derive the nullifier key from the FVK
     let nk = fvk.vk.nk;
 

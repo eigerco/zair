@@ -3,7 +3,7 @@ use eyre::{Result, WrapErr as _, eyre};
 use light_wallet_api::ChainSpec;
 use light_wallet_api::compact_tx_streamer_client::CompactTxStreamerClient;
 use orchard::keys::FullViewingKey as OrchardFvk;
-use sapling_crypto::keys::FullViewingKey as SaplingFvk;
+use sapling::keys::FullViewingKey as SaplingFvk;
 use tonic::Request;
 use tonic::transport::Endpoint;
 use tracing::{debug, info};
