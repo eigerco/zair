@@ -27,6 +27,7 @@
         git
         protobuf
         typos
+        tokio-console
       ];
 
       # Documentation generation tools

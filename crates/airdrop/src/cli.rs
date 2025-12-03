@@ -27,6 +27,18 @@ pub(crate) enum Commands {
             default_value = "airdrop_configuration.json"
         )]
         configuration_output_file: String,
+        #[arg(
+            long,
+            env = "SAPLING_SNAPSHOT_NULLIFIERS",
+            default_value = "sapling-snapshot-nullifiers.bin"
+        )]
+        sapling_snapshot_nullifiers: String,
+        #[arg(
+            long,
+            env = "ORCHARD_SNAPSHOT_NULLIFIERS",
+            default_value = "orchard-snapshot-nullifiers.bin"
+        )]
+        orchard_snapshot_nullifiers: String,
     },
     /// Find notes in the nullifier set
     FindNotes {

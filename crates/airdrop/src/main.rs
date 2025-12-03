@@ -3,7 +3,7 @@
 use clap::Parser as _;
 use non_membership_proofs::{build_merkle_tree, partition_by_pool, write_raw_nullifiers};
 use rs_merkle::algorithms::Sha256;
-use tracing::debug;
+use tracing::info;
 
 use crate::cli::{Cli, Commands, CommonArgs};
 
@@ -38,29 +38,50 @@ async fn main() -> eyre::Result<()> {
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
+        .with_timer(tracing_subscriber::fmt::time::uptime())
         .init();
 
     // Parse CLI arguments (includes env vars loaded from .env)
     let cli = Cli::parse();
-    debug!("Cli Configuration: {cli:?}");
+    info!("Cli Configuration: {cli:?}");
 
     match &cli.command {
         Commands::BuildAirdropConfiguration {
             config,
             configuration_output_file,
+            sapling_snapshot_nullifiers,
+            orchard_snapshot_nullifiers,
         } => {
             let stream = chain_nullifiers::get_nullifiers(&config).await?;
 
-            let (mut sapling, mut orchard) = partition_by_pool(stream).await?;
+            let (mut sapling_nullifiers, mut orchard_nullifiers) =
+                partition_by_pool(stream).await?;
+
+            info!(
+                "Collected {} sapling nullifiers and {} orchard nullifiers",
+                sapling_nullifiers.len(),
+                orchard_nullifiers.len()
+            );
 
             // store nullifiers
             // Store the nullifiers so we can later generate proofs for
             // the nullifiers we are interested in.
-            write_raw_nullifiers(&sapling, "sapling_nullifiers-runtime.bin").await?;
-            write_raw_nullifiers(&orchard, "orchard_nullifiers-runtime.bin").await?;
+            write_raw_nullifiers(&sapling_nullifiers, sapling_snapshot_nullifiers).await?;
+            info!("Written sapling nullifiers to disk");
+            write_raw_nullifiers(&orchard_nullifiers, orchard_snapshot_nullifiers).await?;
+            info!("Written orchard nullifiers to disk");
 
-            let sapling_tree = build_merkle_tree::<Sha256>(&mut sapling);
-            let orchard_tree = build_merkle_tree::<Sha256>(&mut orchard);
+            let sapling_tree = build_merkle_tree::<Sha256>(&mut sapling_nullifiers);
+            info!(
+                "Built sapling merkle tree with root: {}",
+                sapling_tree.root_hex().unwrap_or_default()
+            );
+
+            let orchard_tree = build_merkle_tree::<Sha256>(&mut orchard_nullifiers);
+            info!(
+                "Built orchard merkle tree with root: {}",
+                orchard_tree.root_hex().unwrap_or_default()
+            );
 
             airdrop_configuration::AirdropConfiguration::new(
                 sapling_tree.root_hex().as_deref(),
@@ -69,10 +90,12 @@ async fn main() -> eyre::Result<()> {
             .export_config(configuration_output_file)
             .await?;
 
+            info!("Exported airdrop configuration to {configuration_output_file}",);
+
             Ok(())
         }
         Commands::FindNotes { .. } => {
-            todo!()
+            unimplemented!("FindNotes command is not yet implemented");
         }
     }
 }
