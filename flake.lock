@@ -154,12 +154,31 @@
         "type": "github"
       }
     },
+    "orchard": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1740099969,
+        "narHash": "sha256-AGfwK43/kw5+SCt3kwXZHosxeuzbVS6V630EXILDJdc=",
+        "owner": "zcash",
+        "repo": "orchard",
+        "rev": "0a718935644e93015c6ce548406d45db653b1d69",
+        "type": "github"
+      },
+      "original": {
+        "owner": "zcash",
+        "ref": "v0.11.0",
+        "repo": "orchard",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
         "git-hooks-nix": "git-hooks-nix",
         "nixpkgs": "nixpkgs_2",
+        "orchard": "orchard",
         "rust-overlay": "rust-overlay",
+        "sapling-crypto": "sapling-crypto",
         "treefmt-nix": "treefmt-nix"
       }
     },
@@ -178,6 +197,23 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "sapling-crypto": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1740100410,
+        "narHash": "sha256-K4T4b0GBIIyHeC1FHnEVNwhzfKqUMw/o2j27YMia47Q=",
+        "owner": "zcash",
+        "repo": "sapling-crypto",
+        "rev": "4ac190db9954d3e5388d7a08f8de6f57a69a2e78",
+        "type": "github"
+      },
+      "original": {
+        "owner": "zcash",
+        "ref": "v0.5.0",
+        "repo": "sapling-crypto",
         "type": "github"
       }
     },

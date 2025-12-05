@@ -9,6 +9,24 @@
         overlays = [ (import inputs.rust-overlay) ];
       };
 
+      # Patch orchard
+      patchedOrchard = pkgs.runCommand "orchard-patched" { } ''
+        cp -r ${inputs.orchard} $out
+        chmod -R +w $out
+
+        # Apply a patch file
+        patch -p1 -d $out < ${./airdrop-orchard-nullifier.patch}
+      '';
+
+      # Patch sapling
+      patchedSapling = pkgs.runCommand "sapling-patched" { } ''
+        cp -r ${inputs.sapling-crypto} $out
+        chmod -R +w $out
+
+        # Apply a patch file
+        patch -p1 -d $out < ${./airdrop-sapling-nullifier.patch}
+      '';
+
       # Define Rust toolchain - you can customize this
       rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ../rust-toolchain.toml;
 
@@ -101,12 +119,18 @@
         # Environment variables
         env = {
           RUST_BACKTRACE = "1";
-          RUST_LOG = "debug";
         };
 
         shellHook = ''
           ${config.pre-commit.installationScript}
           ${pathExtensions.cargo}
+
+          # Create symlink to patched orchard for Cargo
+          ln -sfn ${patchedOrchard} ./.patched-orchard
+
+          # Create symlink to patched sapling for Cargo
+          ln -sfn ${patchedSapling} ./.patched-sapling-crypto
+
           ${devInfo}
         '';
       };

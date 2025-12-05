@@ -7,6 +7,17 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
     treefmt-nix.url = "github:numtide/treefmt-nix";
+
+    # Pin to specific versions matching Cargo.toml
+    orchard = {
+      url = "github:zcash/orchard/v0.11.0";
+      flake = false;
+    };
+
+    sapling-crypto = {
+      url = "github:zcash/sapling-crypto/v0.5.0";
+      flake = false;
+    };
   };
 
   outputs =

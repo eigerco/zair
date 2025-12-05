@@ -94,6 +94,10 @@ suspicious = { priority = -7, level = "deny" }
 use_debug = "allow"
 wildcard_imports = "allow"
 
+[patch.crates-io]
+orchard = { path = "./.patched-orchard" }
+sapling-crypto = { path = "./.patched-sapling-crypto" }
+
 [workspace.lints.rust]
 missing_docs = { level = "warn", priority = -1 }
 rust_2018_idioms = { level = "deny", priority = 0 }
