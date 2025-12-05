@@ -1,12 +1,11 @@
 //! This module defines the NullifierSource trait and its implementations.
 //! NullifierSource provides a streaming interface to read nullifiers from various sources.
 
+use std::ops::RangeInclusive;
+
 use futures_core::Stream;
 
-pub mod file;
-pub mod light_walletd;
-
-/// A reprecentation of Nullifiers
+/// A representation of Nullifiers
 ///
 /// Nullifiers in Zcash Orchard and Sapling pools are both 32 bytes long.
 pub type Nullifier = [u8; 32];
@@ -39,6 +38,11 @@ pub trait NullifierSource: Sized {
     /// The concrete stream type returned by this source
     type Stream: Stream<Item = Result<PoolNullifier, Self::Error>> + Send;
 
-    /// Consume self and return a stream of all nullifiers (both Sapling and Orchard)
-    fn into_nullifiers_stream(self) -> Self::Stream;
+    /// Return a stream of all nullifiers (both Sapling and Orchard) in the given range.
+    ///
+    /// # Cancellation
+    ///
+    /// Dropping the stream cancels the operation. See individual implementations
+    /// for details on cleanup behavior.
+    fn into_nullifiers_stream(&self, range: &RangeInclusive<u64>) -> Self::Stream;
 }

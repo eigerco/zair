@@ -3,6 +3,9 @@ name = "non-membership-proofs"
 version = "0.1.0"
 edition.workspace = true
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--html-in-header", "katex.html"]
+
 [dependencies]
 async-stream = { workspace = true }
 bytemuck = { workspace = true }
@@ -10,7 +13,9 @@ futures = { workspace = true }
 futures-core = { workspace = true }
 hex = { workspace = true }
 light-wallet-api = { workspace = true }
+orchard = { workspace = true }
 rs_merkle = { workspace = true }
+sapling = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [
   "rt-multi-thread",
@@ -19,6 +24,9 @@ tokio = { workspace = true, features = [
   "io-util",
 ] }
 tonic = { workspace = true, features = ["tls-webpki-roots"] }
+zcash_note_encryption = { workspace = true }
+zcash_primitives = { workspace = true }
+zip32 = "0.2"
 
 [lints]
 workspace = true

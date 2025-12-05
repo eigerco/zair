@@ -1,12 +1,11 @@
 //! Command-line interface for airdrop cli application
 
-use std::io::Cursor;
 use std::ops::RangeInclusive;
 
 use clap::Parser;
 use eyre::{Context as _, Result, ensure, eyre};
 use orchard::keys::FullViewingKey as OrchardFvk;
-use sapling::keys::FullViewingKey as SaplingFvk;
+use sapling::zip32::DiversifiableFullViewingKey;
 use zcash_primitives::consensus::Network;
 
 #[derive(Debug, Parser)]
@@ -45,8 +44,12 @@ pub(crate) enum Commands {
         )]
         orchard_snapshot_nullifiers: String,
     },
-    /// Find notes in the nullifier set
-    FindNotes {
+    /// Prepare the airdrop claim.
+    ///
+    /// 1. Build the nuliffiers non-membership proof Merkle trees from the snapshot nullifiers.
+    /// 2. Scan the chain for notes belonging to the provided viewing keys.
+    /// 3. Output the non-membership proofs
+    AirdropClaim {
         #[command(flatten)]
         config: CommonArgs,
         /// Sapling snapshot nullifiers. This file contains the sapling nullifiers of the snapshot.
@@ -71,8 +74,12 @@ pub(crate) enum Commands {
         orchard_fvk: OrchardFvk,
 
         /// Sapling Full Viewing Key (hex-encoded, 96 bytes)
-        #[arg(short = 's', long, env = "SAPLING_FVK", value_parser = parse_sapling_fvk)]
-        sapling_fvk: SaplingFvk,
+        #[arg(short = 's', long, env = "DIVERSIFIABLE_FULL_VIEWING_KEY", value_parser = parse_sapling_fvk)]
+        sapling_fvk: DiversifiableFullViewingKey,
+
+        /// Birthday height for the provided viewing keys
+        #[arg(long, env = "BIRTHDAY_HEIGHT", default_value_t = 419_200)]
+        birthday_height: u64,
     },
 }
 
@@ -149,8 +156,8 @@ impl TryFrom<SourceArgs> for Source {
 
 fn parse_range(s: &str) -> Result<RangeInclusive<u64>> {
     let (start, end) = s
-        .split_once("..")
-        .ok_or_else(|| eyre!("Invalid range format. Use START..END"))?;
+        .split_once("..=")
+        .ok_or_else(|| eyre!("Invalid range format. Use START..=END"))?;
     Ok(start.parse()?..=end.parse()?)
 }
 
@@ -180,15 +187,22 @@ fn parse_orchard_fvk(hex: &str) -> Result<OrchardFvk> {
 }
 
 /// Parse hex-encoded Sapling Full Viewing Key
-fn parse_sapling_fvk(hex: &str) -> Result<SaplingFvk> {
+fn parse_sapling_fvk(hex: &str) -> Result<DiversifiableFullViewingKey> {
     let bytes = hex::decode(hex).wrap_err("Failed to decode Sapling FVK from hex string")?;
 
     ensure!(
-        bytes.len() == 96,
-        "Invalid Sapling FVK length: expected 96 bytes, got {} bytes",
+        bytes.len() == 128,
+        "Invalid Sapling FVK length: expected 128 bytes, got {} bytes",
         bytes.len()
     );
 
-    SaplingFvk::read(&mut Cursor::new(bytes))
-        .wrap_err("Invalid Sapling FVK: failed to parse 96-byte representation")
+    println!("Decoded sapling fvk bytes length: {}", bytes.len());
+
+    let bytes: &[u8; 128] = bytes
+        .as_slice()
+        .try_into()
+        .wrap_err("Slice conversion error")?;
+
+    DiversifiableFullViewingKey::from_bytes(bytes)
+        .ok_or_else(|| eyre!("Invalid Sapling FVK: failed to parse 128-byte representation"))
 }

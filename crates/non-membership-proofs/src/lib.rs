@@ -3,6 +3,8 @@
 // TODO: remove hardcoded values from this file
 
 pub mod nullifier_source;
+pub mod source;
+pub mod user_nullifiers;
 pub mod utils;
 
 use std::path::Path;
@@ -10,6 +12,7 @@ use std::path::Path;
 use futures::{Stream, TryStreamExt as _};
 use nullifier_source::{Nullifier, Pool, PoolNullifier};
 use rs_merkle::{Hasher, MerkleTree};
+use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, BufReader, BufWriter};
 
@@ -34,6 +37,17 @@ where
     Ok((sapling, orchard))
 }
 
+/// Errors that can occur when building a Merkle tree for non-membership proofs
+#[derive(Error, Debug)]
+pub enum MerkleTreeError {
+    /// Nullifiers are not sorted.
+    /// Nullifiers must be sorted to build the Merkle tree for non-membership proofs.
+    #[error(
+        "Nullifiers are not sorted. Nullifiers must be sorted to build the Merkle tree for non-membership proofs."
+    )]
+    NotSorted,
+}
+
 /// Build a Merkle tree from the given nullifiers to produce non-membership proofs
 ///
 /// Algorithm:
@@ -41,8 +55,12 @@ where
 /// 2. Concatenate each consecutive nullifiers to store ranges of nullifiers in leaf nodes.
 /// Merge: [nf1, nf2, nf3, nf4] -> [(nf1, nf2), (nf2, nf3)]
 /// 3. Hash each leaf node
-pub fn build_merkle_tree<H: Hasher>(nullifiers: &mut [Nullifier]) -> MerkleTree<H> {
-    nullifiers.sort_unstable();
+pub fn build_merkle_tree<H: Hasher>(
+    nullifiers: &[Nullifier],
+) -> Result<MerkleTree<H>, MerkleTreeError> {
+    if !nullifiers.is_sorted() {
+        return Err(MerkleTreeError::NotSorted);
+    }
 
     let leaves = nullifiers
         .windows(2)
@@ -55,7 +73,7 @@ pub fn build_merkle_tree<H: Hasher>(nullifiers: &mut [Nullifier]) -> MerkleTree<
         .map(|leaf| H::hash(&leaf))
         .collect::<Vec<_>>();
 
-    MerkleTree::from_leaves(&leaves)
+    Ok(MerkleTree::from_leaves(&leaves))
 }
 
 /// Write leaf notes to binary file without intermediate allocation

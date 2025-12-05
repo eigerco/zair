@@ -56,13 +56,13 @@ fn main() -> Result<()> {
                 orchard_key.to_bytes()
             ))
     );
-    println!("Sapling FVK:");
+    println!("Sapling diversifiable FVK:");
     println!(
         "  👀 {}\n",
         keys.ufvk
             .sapling()
-            .map_or_else(String::new, |orchard_key| hex::encode(
-                orchard_key.to_bytes()
+            .map_or_else(String::new, |sapling_key| hex::encode(
+                sapling_key.to_bytes()
             ))
     );
 
@@ -77,7 +77,7 @@ fn main() -> Result<()> {
         println!("Sapling Spending Key:");
         println!("  🔑 {}\n", hex::encode(keys.usk.sapling().to_bytes()));
     } else {
-        println!("ℹ️  Spending keys hidden. Use --show-spending-keys to display.");
+        println!("ℹ️  Spending keys are hidden. Use --show-spending-keys to display.");
     }
     println!("\n{}", "=".repeat(50));
 

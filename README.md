@@ -38,3 +38,5 @@ Describe all the tools present in the PR
 ## TODO
 
 Check the [zaino](https://github.com/zingolabs/zaino)
+
+RUSTDOCFLAGS="--html-in-header $(pwd)/crates/non-membership-proofs/katex.html" cargo doc -p non-membership-proofs --no-deps --open

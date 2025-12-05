@@ -1453,11 +1453,16 @@ dependencies = [
  "futures-core",
  "hex",
  "light-wallet-api",
+ "orchard",
  "rs_merkle",
+ "sapling-crypto",
  "thiserror 2.0.17",
  "tokio",
  "tonic",
  "tonic-prost-build",
+ "zcash_note_encryption",
+ "zcash_primitives",
+ "zip32",
 ]
 
 [[package]]

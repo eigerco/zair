@@ -1,12 +1,18 @@
 //! Airdrop CLI Application
 
 use clap::Parser as _;
-use non_membership_proofs::{
-    build_merkle_tree, partition_by_pool, read_raw_nullifiers, write_raw_nullifiers,
+use eyre::ensure;
+use futures::StreamExt;
+use non_membership_proofs::source::light_walletd::LightWalletd;
+use non_membership_proofs::user_nullifiers::{
+    OrchardViewingKeys, SaplingViewingKeys, UserNullifiers as _, ViewingKeys,
 };
+use non_membership_proofs::{build_merkle_tree, partition_by_pool, write_raw_nullifiers};
 use rs_merkle::algorithms::Sha256;
-use tracing::info;
+use tracing::{debug, info};
+use zcash_primitives::consensus::{MainNetwork, Network, TestNetwork};
 
+use crate::chain_nullifiers::load_nullifiers_from_file;
 use crate::cli::{Cli, Commands, CommonArgs};
 
 mod airdrop_configuration;
@@ -65,6 +71,9 @@ async fn main() -> eyre::Result<()> {
                 orchard_nullifiers.len()
             );
 
+            sapling_nullifiers.sort_unstable();
+            orchard_nullifiers.sort_unstable();
+
             // store nullifiers
             // Store the nullifiers so we can later generate proofs for
             // the nullifiers we are interested in.
@@ -73,13 +82,13 @@ async fn main() -> eyre::Result<()> {
             write_raw_nullifiers(&orchard_nullifiers, orchard_snapshot_nullifiers).await?;
             info!("Written orchard nullifiers to disk");
 
-            let sapling_tree = build_merkle_tree::<Sha256>(&mut sapling_nullifiers);
+            let sapling_tree = build_merkle_tree::<Sha256>(&sapling_nullifiers)?;
             info!(
                 "Built sapling merkle tree with root: {}",
                 sapling_tree.root_hex().unwrap_or_default()
             );
 
-            let orchard_tree = build_merkle_tree::<Sha256>(&mut orchard_nullifiers);
+            let orchard_tree = build_merkle_tree::<Sha256>(&orchard_nullifiers)?;
             info!(
                 "Built orchard merkle tree with root: {}",
                 orchard_tree.root_hex().unwrap_or_default()
@@ -96,31 +105,154 @@ async fn main() -> eyre::Result<()> {
 
             Ok(())
         }
-        Commands::FindNotes {
-            config: _,
+        Commands::AirdropClaim {
+            config,
             sapling_snapshot_nullifiers,
             orchard_snapshot_nullifiers,
-            orchard_fvk: _,
-            sapling_fvk: _,
+            orchard_fvk,
+            sapling_fvk,
+            birthday_height,
         } => {
             // TODO: if the sapling or orchard snapshot nullifiers files do not exist,
             // it should be possible to build them from the chain again.
-            let mut sapling_nullifiers = read_raw_nullifiers(sapling_snapshot_nullifiers).await?;
-            let mut orchard_nullifiers = read_raw_nullifiers(orchard_snapshot_nullifiers).await?;
 
-            let sapling_tree = build_merkle_tree::<Sha256>(&mut sapling_nullifiers);
+            let sapling_nullifiers = load_nullifiers_from_file(sapling_snapshot_nullifiers).await?;
+            let orchard_nullifiers = load_nullifiers_from_file(orchard_snapshot_nullifiers).await?;
+
+            info!(
+                "Read {} sapling nullifiers and {} orchard nullifiers from disk",
+                sapling_nullifiers.len(),
+                orchard_nullifiers.len()
+            );
+
+            let sapling_tree = build_merkle_tree::<Sha256>(&sapling_nullifiers)?;
             info!(
                 "Built sapling merkle tree with root: {}",
                 sapling_tree.root_hex().unwrap_or_default()
             );
 
-            let orchard_tree = build_merkle_tree::<Sha256>(&mut orchard_nullifiers);
+            let orchard_tree = build_merkle_tree::<Sha256>(&orchard_nullifiers)?;
             info!(
                 "Built orchard merkle tree with root: {}",
                 orchard_tree.root_hex().unwrap_or_default()
             );
 
             // Find user notes logic
+            let query_nullifiers =
+                LightWalletd::connect(config.source.lightwalletd_url.as_ref().unwrap()).await?;
+
+            ensure!(
+                birthday_height <= config.snapshot.end(),
+                "Birthday height cannot be greater than the snapshot end height"
+            );
+
+            // Create viewing keys for nullifier derivation
+            let viewing_keys = ViewingKeys {
+                sapling: Some(SaplingViewingKeys::from_dfvk(&sapling_fvk)),
+                orchard: Some(OrchardViewingKeys::from_fvk(&orchard_fvk)),
+            };
+
+            let mut stream = match config.network {
+                Network::TestNetwork => Box::pin(query_nullifiers.user_nullifiers::<TestNetwork>(
+                    &TestNetwork,
+                    *config.snapshot.start(),
+                    *config.snapshot.end(),
+                    &orchard_fvk,
+                    &sapling_fvk,
+                )),
+                Network::MainNetwork => Box::pin(query_nullifiers.user_nullifiers::<MainNetwork>(
+                    &MainNetwork,
+                    *config.snapshot.start(),
+                    *config.snapshot.end(),
+                    &orchard_fvk,
+                    &sapling_fvk,
+                )),
+            };
+
+            let mut found_notes = vec![];
+            let mut user_nullifiers: Vec<[u8; 32]> = vec![];
+
+            info!("Scanning blocks for user notes...");
+
+            while let Some(found_note) = stream.next().await {
+                let found_note = found_note?;
+
+                // Derive nullifier for this note
+                let nullifier = found_note.nullifier(&viewing_keys);
+
+                info!(
+                    "Found {} note at height {}: nullifier = {}, scope = {:?}",
+                    found_note.pool(),
+                    found_note.height(),
+                    hex::encode(nullifier),
+                    found_note.scope()
+                );
+
+                user_nullifiers.push(nullifier);
+                found_notes.push(found_note);
+            }
+
+            info!(
+                "Scan complete. Found {} notes with {} nullifiers",
+                found_notes.len(),
+                user_nullifiers.len()
+            );
+
+            // Summary by pool
+            let sapling_count = found_notes.iter().filter(|n| n.pool() == "Sapling").count();
+            let orchard_count = found_notes.iter().filter(|n| n.pool() == "Orchard").count();
+
+            info!("Summary: {sapling_count} Sapling notes, {orchard_count} Orchard notes");
+
+            // Print all nullifiers for reference
+            info!("User nullifiers:");
+            for (i, nf) in user_nullifiers.iter().enumerate() {
+                info!("  [{i}] {}", hex::encode(nf));
+            }
+
+            for nf in user_nullifiers {
+                let mut nf_rev = nf.clone();
+                nf_rev.reverse();
+
+                match sapling_nullifiers.binary_search(&nf_rev) {
+                    Ok(_) => {
+                        debug!(
+                            "Spend Nullifier {} found in sapling snapshot nullifiers",
+                            hex::encode(nf)
+                        )
+                    }
+                    Err(idx) => {
+                        let _left = idx.saturating_sub(1);
+                        let _right = idx.saturating_add(1);
+
+                        unimplemented!(
+                            "Concatenate left and right then hash. Find the merkle path"
+                        );
+                    }
+                }
+
+                match orchard_nullifiers.binary_search(&nf_rev) {
+                    Ok(_) => {
+                        debug!(
+                            "Spend Nullifier {} found in orchard snapshot nullifiers",
+                            hex::encode(nf)
+                        )
+                    }
+                    Err(idx) => {
+                        let _left = idx.saturating_sub(1);
+                        let _right = idx.saturating_add(1);
+
+                        unimplemented!(
+                            "Concatenate left and right then hash. Find the merkle path"
+                        );
+                    }
+                }
+            }
+
+            // TODO: output
+            // 1. One merkle proof per note/nullifier
+            // 2. Airdrop nullifier of the user notes
+            // 3.
 
             Ok(())
         }
