@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 use futures::{Stream, StreamExt as _};
-use non_membership_proofs::nullifier_source::{NullifierSource, PoolNullifier};
+use non_membership_proofs::chain_nullifiers::{ChainNullifiers, PoolNullifier};
 use non_membership_proofs::source::file::FileSource;
 use non_membership_proofs::source::light_walletd::LightWalletd;
 use tracing::{debug, instrument};

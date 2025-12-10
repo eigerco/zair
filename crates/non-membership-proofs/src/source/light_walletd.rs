@@ -12,7 +12,7 @@ use sapling::zip32::DiversifiableFullViewingKey;
 use tonic::transport::Channel;
 use zcash_primitives::consensus::Parameters;
 
-use crate::nullifier_source::{Nullifier, NullifierSource, Pool, PoolNullifier};
+use crate::chain_nullifiers::{ChainNullifiers, Nullifier, Pool, PoolNullifier};
 use crate::user_nullifiers::decrypt_notes::{DecryptedNote, decrypt_compact_block};
 use crate::user_nullifiers::{
     FoundNote, NoteMetadata, OrchardViewingKeys, SaplingViewingKeys, UserNullifiers, ViewingKeys,
@@ -32,7 +32,7 @@ pub enum LightWalletdError {
     InvalidLength(usize),
 }
 
-/// A ligtwalletd client
+/// A lightwalletd client
 pub struct LightWalletd {
     client: CompactTxStreamerClient<Channel>,
 }
@@ -57,7 +57,7 @@ impl LightWalletd {
 /// The stream can be cancelled by dropping it. The underlying gRPC connection
 /// will be closed, though the server may continue processing briefly until it
 /// detects the disconnect. No explicit cancellation signal is sent.
-impl NullifierSource for LightWalletd {
+impl ChainNullifiers for LightWalletd {
     type Error = LightWalletdError;
     type Stream = Pin<Box<dyn Stream<Item = Result<PoolNullifier, Self::Error>> + Send>>;
 

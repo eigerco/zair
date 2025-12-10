@@ -18,7 +18,7 @@ use futures_core::Stream;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, BufReader};
 
-use crate::nullifier_source::{NullifierSource, Pool, PoolNullifier};
+use crate::chain_nullifiers::{ChainNullifiers, Pool, PoolNullifier};
 
 /// Read nullifiers from local files
 pub struct FileSource {
@@ -36,7 +36,7 @@ impl FileSource {
     }
 }
 
-impl NullifierSource for FileSource {
+impl ChainNullifiers for FileSource {
     type Error = io::Error;
     type Stream = Pin<Box<dyn Stream<Item = Result<PoolNullifier, Self::Error>> + Send>>;
 

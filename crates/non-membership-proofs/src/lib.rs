@@ -2,15 +2,15 @@
 
 // TODO: remove hardcoded values from this file
 
-pub mod nullifier_source;
+pub mod chain_nullifiers;
 pub mod source;
 pub mod user_nullifiers;
 pub mod utils;
 
 use std::path::Path;
 
+use chain_nullifiers::{Nullifier, Pool, PoolNullifier};
 use futures::{Stream, TryStreamExt as _};
-use nullifier_source::{Nullifier, Pool, PoolNullifier};
 use rs_merkle::{Hasher, MerkleTree};
 use thiserror::Error;
 use tokio::fs::File;
