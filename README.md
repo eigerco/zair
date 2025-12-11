@@ -40,3 +40,18 @@ Describe all the tools present in the PR
 Check the [zaino](https://github.com/zingolabs/zaino)
 
 RUSTDOCFLAGS="--html-in-header $(pwd)/crates/non-membership-proofs/katex.html" cargo doc -p non-membership-proofs --no-deps --open
+
+## Setup Instructions
+
+git submodule update --init --recursive
+
+git clone --branch v0.11.0 --single-branch https://github.com/zcash/orchard.git .patched-orchard
+git -C .patched-orchard apply "../nix/airdrop-orchard-nullifier.patch"
+
+git clone --branch v0.5.0 --single-branch https://github.com/zcash/sapling-crypto.git .patched-sapling-crypto
+git -C .patched-sapling-crypto apply "../nix/airdrop-sapling-nullifier.patch"
+
+
+
+
+
