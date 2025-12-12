@@ -31,11 +31,13 @@ fn parse_network(s: &str) -> Result<Network> {
 
 #[allow(clippy::print_stdout, reason = "CLI utility")]
 fn main() -> Result<()> {
+    // Load .env file (fails silently if not found)
     #[allow(
+        clippy::let_underscore_must_use,
         clippy::let_underscore_untyped,
         reason = "Ignoring dotenv result intentionally"
     )]
-    let _ = dotenvy::dotenv().ok();
+    let _ = dotenvy::dotenv();
     let cli = Cli::parse();
 
     let mut mnemonic = read_mnemonic_secure()

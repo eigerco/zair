@@ -34,9 +34,7 @@ pub enum Pool {
     Orchard,
 }
 
-/// Collect stream into separate pools
-///
-/// TODO: use `Vec::capacity`
+/// Collect stream into separate vectors, by pool.
 ///
 /// # Errors
 ///
@@ -81,8 +79,14 @@ pub enum MerkleTreeError {
 /// # Errors
 ///
 /// If the nullifiers are not sorted in ascending order returns `MerkleTreeError::NotSorted`
+///
+/// # Panics
+/// If the nullifiers slice is empty when accessing first/last elements.
+/// This is prevented by the `is_empty()` check at the start of the function.
+/// Also panics when indexing into `windows(2)` slices,
+/// but this is prevented by the guarantee
 #[allow(
-    clippy::missing_panics_doc,
+    clippy::panic_in_result_fn,
     clippy::indexing_slicing,
     reason = "Panics are impossible: we check is_empty() before .expect(), and windows(2) guarantees 2 elements"
 )]
@@ -98,8 +102,12 @@ pub fn build_merkle_tree<H: Hasher>(
     }
 
     // Safe: we already checked nullifiers is not empty above
-    let first = nullifiers.first().expect("nullifiers is not empty");
-    let last = nullifiers.last().expect("nullifiers is not empty");
+    let first = nullifiers
+        .first()
+        .expect("Nullifiers array is not empty, and this should always have a value");
+    let last = nullifiers
+        .last()
+        .expect("Nullifiers array is not empty, and this should always have a value");
 
     let front = H::hash(&build_leaf(&[0_u8; NULLIFIER_SIZE], first));
     let back = H::hash(&build_leaf(last, &[0xFF; NULLIFIER_SIZE]));
@@ -110,7 +118,7 @@ pub fn build_merkle_tree<H: Hasher>(
     leaves.push(front);
     leaves.extend(nullifiers.windows(2).map(|w| {
         // windows(2) guarantees w.len() == 2
-        debug_assert_eq!(
+        assert_eq!(
             w.len(),
             2,
             "windows(2) should always yield slices of length 2"

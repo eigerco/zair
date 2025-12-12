@@ -22,11 +22,8 @@ use crate::{Nullifier, Pool};
 
 /// Errors that can occur when interacting with lightwalletd
 #[derive(Debug, thiserror::Error)]
-#[allow(
-    clippy::error_impl_error,
-    reason = "Module-scoped Error type is idiomatic"
-)]
-pub enum Error {
+#[allow(clippy::module_name_repetitions, reason = "Needed for clarity.")]
+pub enum LightWalletdError {
     /// gRPC error from lightwalletd
     #[error("gRPC: {0}")]
     Grpc(#[from] tonic::Status),
@@ -41,7 +38,7 @@ pub enum Error {
     Decrypt(#[from] DecryptError),
 }
 
-/// A lightwalletd client for streaming blockchain data
+/// A lightwalletd client
 pub struct LightWalletd {
     client: CompactTxStreamerClient<Channel>,
 }
@@ -57,7 +54,7 @@ impl LightWalletd {
     /// # Errors
     ///
     /// Returns an error if the connection to the endpoint fails.
-    pub async fn connect(endpoint: &str) -> Result<Self, Error> {
+    pub async fn connect(endpoint: &str) -> Result<Self, LightWalletdError> {
         let client = CompactTxStreamerClient::connect(endpoint.to_owned()).await?;
 
         Ok(Self { client })
@@ -72,7 +69,7 @@ impl LightWalletd {
 /// will be closed, though the server may continue processing briefly until it
 /// detects the disconnect. No explicit cancellation signal is sent.
 impl ChainNullifiers for LightWalletd {
-    type Error = Error;
+    type Error = LightWalletdError;
     type Stream = Pin<Box<dyn Stream<Item = Result<PoolNullifier, Self::Error>> + Send>>;
 
     fn nullifiers_stream(&self, range: &RangeInclusive<u64>) -> Self::Stream {
@@ -102,7 +99,7 @@ impl ChainNullifiers for LightWalletd {
                     for spend in tx.spends {
                         let nullifier: Nullifier = spend.nf
                             .try_into()
-                            .map_err(|v: Vec<u8>| Error::InvalidLength(v.len()))?;
+                            .map_err(|v: Vec<u8>| LightWalletdError::InvalidLength(v.len()))?;
 
                         yield PoolNullifier {
                             pool: Pool::Sapling,
@@ -114,7 +111,7 @@ impl ChainNullifiers for LightWalletd {
                     for action in tx.actions {
                         let nullifier: Nullifier = action.nullifier
                             .try_into()
-                            .map_err(|v: Vec<u8>| Error::InvalidLength(v.len()))?;
+                            .map_err(|v: Vec<u8>| LightWalletdError::InvalidLength(v.len()))?;
 
                         yield PoolNullifier {
                             pool: Pool::Orchard,
@@ -128,7 +125,7 @@ impl ChainNullifiers for LightWalletd {
 }
 
 impl UserNullifiers for LightWalletd {
-    type Error = Error;
+    type Error = LightWalletdError;
     type Stream = Pin<Box<dyn Stream<Item = Result<AnyFoundNote, Self::Error>> + Send>>;
 
     fn user_nullifiers<P: Parameters + Clone + Send + 'static>(
@@ -192,19 +189,6 @@ impl UserNullifiers for LightWalletd {
 
                 for note in notes {
                     match note {
-                        DecryptedNote::Orchard(orchard_note) => {
-                            let txid = block.vtx.get(orchard_note.tx_index)
-                                .map_or_else(Vec::new, |tx| tx.txid.clone());
-
-                            yield AnyFoundNote::Orchard(FoundNote::<orchard::Note> {
-                                note: orchard_note.note,
-                                metadata: NoteMetadata {
-                                    height: block.height,
-                                    txid,
-                                    scope: orchard_note.scope,
-                                },
-                            });
-                        }
                         DecryptedNote::Sapling(sapling_note) => {
                             // Calculate the note's position in the global Sapling commitment tree
                             // Position = tree_size_at_block_start + outputs_before_this_tx + output_index
@@ -228,6 +212,19 @@ impl UserNullifiers for LightWalletd {
                                     height: block.height,
                                     txid,
                                     scope: sapling_note.scope,
+                                },
+                            });
+                        }
+                        DecryptedNote::Orchard(orchard_note) => {
+                            let txid = block.vtx.get(orchard_note.tx_index)
+                                .map_or_else(Vec::new, |tx| tx.txid.clone());
+
+                            yield AnyFoundNote::Orchard(FoundNote::<orchard::Note> {
+                                note: orchard_note.note,
+                                metadata: NoteMetadata {
+                                    height: block.height,
+                                    txid,
+                                    scope: orchard_note.scope,
                                 },
                             });
                         }

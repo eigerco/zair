@@ -49,14 +49,14 @@ pub trait NoteNullifier: Sized {
 }
 
 /// Sapling hiding factor
-#[allow(missing_docs, reason = "Fields are self-explanatory")]
+#[allow(missing_docs, reason = "Skip internal documentation")]
 #[derive(Debug)]
 pub struct SaplingHidingFactor<'a> {
     pub personalization: &'a [u8],
 }
 
 /// Orchard hiding factor
-#[allow(missing_docs, reason = "Fields are self-explanatory")]
+#[allow(missing_docs, reason = "Skip internal documentation")]
 #[derive(Debug)]
 pub struct OrchardHidingFactor<'a> {
     pub domain: &'a str,

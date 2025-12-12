@@ -43,6 +43,11 @@ RUSTDOCFLAGS="--html-in-header $(pwd)/crates/non-membership-proofs/katex.html" c
 
 ## Setup Instructions
 
+After you clone the repo
+
+### Without nix
+
+```bash
 git submodule update --init --recursive
 
 git clone --branch v0.11.0 --single-branch https://github.com/zcash/orchard.git .patched-orchard
@@ -50,8 +55,12 @@ git -C .patched-orchard apply "../nix/airdrop-orchard-nullifier.patch"
 
 git clone --branch v0.5.0 --single-branch https://github.com/zcash/sapling-crypto.git .patched-sapling-crypto
 git -C .patched-sapling-crypto apply "../nix/airdrop-sapling-nullifier.patch"
+```
 
+### With nix
 
+```bash
+git submodule update --init --recursive
 
-
-
+nix develop
+```

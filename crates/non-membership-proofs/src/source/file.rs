@@ -22,12 +22,16 @@ use crate::Pool;
 use crate::chain_nullifiers::{ChainNullifiers, PoolNullifier};
 
 /// Source for reading nullifiers from local binary files
-pub struct Source {
+#[allow(
+    clippy::module_name_repetitions,
+    reason = "Clearer name for source type"
+)]
+pub struct FileSource {
     sapling_path: PathBuf,
     orchard_path: PathBuf,
 }
 
-impl Source {
+impl FileSource {
     /// Create a new file `Source` with the given file paths
     ///
     /// # Arguments
@@ -42,7 +46,7 @@ impl Source {
     }
 }
 
-impl ChainNullifiers for Source {
+impl ChainNullifiers for FileSource {
     type Error = io::Error;
     type Stream = Pin<Box<dyn Stream<Item = Result<PoolNullifier, Self::Error>> + Send>>;
 
