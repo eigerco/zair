@@ -342,6 +342,35 @@ async fn airdrop_claim(
     Ok(())
 }
 
+fn init_tracing() {
+    #[cfg(feature = "tokio-console")]
+    {
+        // tokio-console: layers the console subscriber with fmt
+        use tracing_subscriber::prelude::*;
+        tracing_subscriber::registry()
+            .with(console_subscriber::spawn())
+            .with(
+                tracing_subscriber::fmt::layer().with_filter(
+                    tracing_subscriber::EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+                ),
+            )
+            .init();
+    }
+
+    #[cfg(not(feature = "tokio-console"))]
+    {
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            )
+            .with_timer(tracing_subscriber::fmt::time::uptime())
+            .with_target(false)
+            .init();
+    }
+}
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     // Initialize rustls crypto provider (required for TLS connections)
@@ -357,15 +386,7 @@ async fn main() -> eyre::Result<()> {
     )]
     let _ = dotenvy::dotenv();
 
-    // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .with_timer(tracing_subscriber::fmt::time::uptime())
-        .with_target(false)
-        .init();
+    init_tracing();
 
     let cli = Cli::parse();
 

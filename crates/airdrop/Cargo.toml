@@ -3,8 +3,13 @@ name = "airdrop"
 version = "0.1.0"
 edition.workspace = true
 
+[features]
+default = []
+tokio-console = ["dep:console-subscriber"]
+
 [dependencies]
 clap = { workspace = true, features = ["derive", "env"] }
+console-subscriber = { workspace = true, optional = true }
 dotenvy = { workspace = true }
 eyre = { workspace = true }
 futures = { workspace = true }
@@ -21,6 +26,7 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "macros",
   "io-util",
+  "tracing",
 ] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }

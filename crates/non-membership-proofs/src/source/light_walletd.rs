@@ -173,7 +173,7 @@ impl UserNullifiers for LightWalletd {
                     .as_ref()
                     .map_or(0, |m| m.sapling_commitment_tree_size);
 
-                let notes = decrypt_compact_block(&network, &block, &keys)?;
+                let notes = tokio::task::block_in_place(|| decrypt_compact_block(&network, &block, &keys))?;
 
                 // Build a map of cumulative Sapling outputs per transaction
                 // This helps us calculate the position of each output in the commitment tree
