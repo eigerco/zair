@@ -50,7 +50,7 @@ pub(crate) enum Commands {
     },
     /// Prepare the airdrop claim.
     ///
-    /// 1. Build the nuliffiers non-membership proof Merkle trees from the snapshot nullifiers.
+    /// 1. Build the nullifiers non-membership proof Merkle trees from the snapshot nullifiers.
     /// 2. Scan the chain for notes belonging to the provided viewing keys.
     /// 3. Output the non-membership proofs
     AirdropClaim {
@@ -160,7 +160,7 @@ impl TryFrom<SourceArgs> for Source {
                 "No source specified. Provide --lightwalletd-url OR --input-files sapling,orchard"
             )),
             (Some(_), Some(_)) => Err(eyre!(
-                "Cannot specify both --lightwalletd-url and --input-files. Nullifiers mast come from a single source."
+                "Cannot specify both --lightwalletd-url and --input-files. Nullifiers must come from a single source."
             )),
         }
     }
