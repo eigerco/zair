@@ -184,7 +184,7 @@ impl AnyFoundNote {
         }
     }
 
-    /// Derive the hiding nullifier for this note
+    /// Returns the pool (Sapling or Orchard) this note belongs to.
     #[must_use]
     pub const fn pool(&self) -> Pool {
         match self {
