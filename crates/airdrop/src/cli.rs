@@ -78,7 +78,7 @@ pub(crate) enum Commands {
         #[arg(short = 'o', long, env = "ORCHARD_FVK", value_parser = parse_orchard_fvk)]
         orchard_fvk: OrchardFvk,
 
-        /// Sapling Full Viewing Key (hex-encoded, 96 bytes)
+        /// Sapling Diversifiable Full Viewing Key (hex-encoded, 128 bytes)
         #[arg(short = 's', long, env = "DIVERSIFIABLE_FULL_VIEWING_KEY", value_parser = parse_sapling_fvk)]
         sapling_fvk: DiversifiableFullViewingKey,
 
