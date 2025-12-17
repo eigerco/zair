@@ -11,6 +11,16 @@ mod cli;
 mod commands;
 mod proof;
 
+/// Check if a slice is sorted and does not contains duplicates
+#[allow(
+    clippy::indexing_slicing,
+    clippy::missing_asserts_for_indexing,
+    reason = "Windows(2) guarantees 2 elements"
+)]
+pub(crate) fn is_sanitize<T: Ord + Clone>(v: &[T]) -> bool {
+    v.is_sorted() && !v.windows(2).any(|w| w[0] == w[1])
+}
+
 fn init_tracing() {
     #[cfg(feature = "tokio-console")]
     {

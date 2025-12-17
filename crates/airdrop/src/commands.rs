@@ -14,10 +14,10 @@ use rs_merkle::algorithms::Sha256;
 use tracing::{debug, info, instrument};
 use zcash_protocol::consensus::{MainNetwork, Network, TestNetwork};
 
-use crate::airdrop_configuration;
 use crate::chain_nullifiers::{self, load_nullifiers_from_file};
 use crate::cli::CommonArgs;
 use crate::proof::generate_non_membership_proof;
+use crate::{airdrop_configuration, is_sanitize};
 
 #[instrument(skip_all, fields(
     snapshot = %format!("{}..={}", config.snapshot.start(), config.snapshot.end())
@@ -40,6 +40,11 @@ pub(crate) async fn build_airdrop_configuration(
 
     sapling_nullifiers.sort_unstable();
     orchard_nullifiers.sort_unstable();
+
+    ensure!(
+        is_sanitize(&sapling_nullifiers) && is_sanitize(&orchard_nullifiers),
+        "Nullifier lists contain duplicates"
+    );
 
     write_raw_nullifiers(&sapling_nullifiers, &sapling_snapshot_nullifiers).await?;
     info!(file = %sapling_snapshot_nullifiers.as_ref().display(), pool = "sapling", "Saved nullifiers");
@@ -95,6 +100,11 @@ pub(crate) async fn airdrop_claim(
     info!("Loading snapshot nullifiers");
     let sapling_nullifiers = load_nullifiers_from_file(&sapling_snapshot_nullifiers).await?;
     let orchard_nullifiers = load_nullifiers_from_file(&orchard_snapshot_nullifiers).await?;
+
+    ensure!(
+        is_sanitize(&sapling_nullifiers) && is_sanitize(&orchard_nullifiers),
+        "Nullifier lists contain duplicates"
+    );
 
     info!(
         sapling = sapling_nullifiers.len(),
