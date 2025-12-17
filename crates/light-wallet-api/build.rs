@@ -1,18 +1,24 @@
 //! Build script to compile protobuf definitions for the Zcash light wallet API.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn find_workspace_dir(
+    manifest_dir: impl AsRef<Path>,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut manifest_dir = manifest_dir.as_ref();
+    while let Some(parent) = manifest_dir.parent() {
+        if parent.join("Cargo.toml").exists() && parent.join("Cargo.lock").exists() {
+            return Ok(parent.to_path_buf());
+        }
+        manifest_dir = parent;
+    }
+
+    Err("Failed to find workspace directory".into())
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_dir = manifest_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .ok_or_else(|| {
-            format!(
-                "Failed to find workspace directory from manifest dir: {}",
-                manifest_dir.display()
-            )
-        })?;
+    let workspace_dir = find_workspace_dir(&manifest_dir)?;
 
     let proto_dir = workspace_dir.join("proto/lightwallet-protocol/walletrpc");
     let compact_formats = proto_dir.join("compact_formats.proto");
