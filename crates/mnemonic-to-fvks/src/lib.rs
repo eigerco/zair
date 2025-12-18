@@ -9,7 +9,7 @@ use zip32::AccountId;
 
 /// Complete set of Zcash keys derived from a mnemonic
 ///
-/// Contains both Full Viewing Keys (for finding notes) and Spending Keys (for deriving nullifiers).
+/// Contains both Full Viewing Keys (for finding notes).
 #[allow(
     missing_debug_implementations,
     reason = "Contains sensitive key material."
@@ -19,9 +19,7 @@ pub struct ZcashKeys {
     pub ufvk: UnifiedFullViewingKey,
 }
 
-/// Derives both Full Viewing Keys AND Spending Keys from a BIP-39 mnemonic phrase
-///
-/// Use this when you need to derive nullifiers (for spend detection).
+/// Derives both Full Viewing Keys from a BIP-39 mnemonic phrase
 ///
 /// # Arguments
 /// - `phrase`: The BIP-39 mnemonic phrase as a string slice
@@ -29,13 +27,10 @@ pub struct ZcashKeys {
 /// - `passphrase`: The optional BIP-39 passphrase (empty string if none)
 ///
 /// # Returns
-/// A Result containing `ZcashKeys` with both viewing and spending keys
+/// A Result containing `ZcashKeys` with viewing keys
 ///
 /// # Errors
 /// Returns an error if the mnemonic phrase is invalid or key derivation fails
-///
-/// # Security Warning
-/// Spending keys allow spending funds. Handle with extreme care.
 pub fn mnemonic_to_keys(
     phrase: &SecretBox<str>,
     network: Network,

@@ -4,6 +4,7 @@
 use std::fmt::Debug;
 
 use futures_core::Stream;
+use light_wallet_api::PoolType;
 use orchard::keys::FullViewingKey as OrchardFvk;
 use sapling::zip32::DiversifiableFullViewingKey;
 use zcash_protocol::TxId;
@@ -212,5 +213,6 @@ pub trait UserNullifiers: Sized {
         end_height: u64,
         orchard_fvk: &OrchardFvk,
         sapling_fvk: &DiversifiableFullViewingKey,
+        pools: Vec<PoolType>,
     ) -> Self::Stream;
 }

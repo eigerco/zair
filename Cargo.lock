@@ -1620,6 +1620,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-prost-build",
+ "tracing",
  "zcash_note_encryption",
  "zcash_primitives",
  "zcash_protocol",

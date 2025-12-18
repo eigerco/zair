@@ -1,4 +1,4 @@
-//! A utility to convert a Zcash mnemonic to Full Viewing Keys and Spending Keys
+//! A utility to convert a Zcash mnemonic to Full Viewing Keys
 //! Supports deriving keys for Sapling and Orchard pools.
 
 use clap::Parser;
@@ -8,7 +8,7 @@ use zcash_protocol::consensus::Network;
 
 #[derive(Parser)]
 #[command(name = "mnemonic-to-fvks")]
-#[command(about = "A utility to convert a Zcash mnemonic to Full Viewing Keys and Spending Keys", long_about = None)]
+#[command(about = "A utility to convert a Zcash mnemonic to Full Viewing Keys", long_about = None)]
 struct Cli {
     /// Specify the coin type for key derivation. Default is Mainnet. Available options: [mainnet,
     /// testnet, regtest]

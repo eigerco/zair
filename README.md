@@ -74,13 +74,20 @@ The workspace also uses `pre-commit` checks. These can be removed if they prove 
   - Building Merkle trees from sorted nullifiers for non-membership proofs
   - Deriving standard and hiding nullifiers for Sapling and Orchard notes
 
-## Zcash pools
+## Usage
 
-A reminder of Zcash pools activation.
+Assuming that the project is set up correctly.
 
-| Pool    | Network | Enabled at Block Height |
-| ------- | ------- | ----------------------- |
-| Sapling | Mainnet | 419,200                 |
-| Sapling | Testnet | 280,000                 |
-| Orchard | Mainnet | 1,687,104               |
-| Orchard | Testnet | 1,842,420               |
+### Building the Project
+
+After completing the setup steps above, you can build the project. The project provides two binaries, `mnemonic-to-fvks` and the `airdrop`. To build them use:
+
+```bash
+cargo build --release
+```
+
+This will produce the optimized `mnemonic-to-fvks` and `airdrop` executables in the `target/release` directory.
+
+### User Guide
+
+For a complete walkthrough of the airdrop claim process, see the **[Usage Guide](docs/USAGE.md)**.

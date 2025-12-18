@@ -4,6 +4,7 @@
 use std::ops::RangeInclusive;
 
 use futures_core::Stream;
+use light_wallet_api::PoolType;
 
 use crate::{Nullifier, Pool};
 
@@ -26,11 +27,15 @@ pub trait ChainNullifiers: Sized {
     /// The concrete stream type returned by this source
     type Stream: Stream<Item = Result<PoolNullifier, Self::Error>> + Send;
 
-    /// Return a stream of all nullifiers (both Sapling and Orchard) in the given range.
+    /// Return a stream of all nullifiers.
+    ///
+    /// # Arguments
+    /// `range`: The inclusive range of block heights to read nullifiers from.
+    /// `pools`: The pools to read nullifiers from.
     ///
     /// # Cancellation
     ///
     /// Dropping the stream cancels the operation. See individual implementations
     /// for details on cleanup behavior.
-    fn nullifiers_stream(&self, range: &RangeInclusive<u64>) -> Self::Stream;
+    fn nullifiers_stream(&self, range: &RangeInclusive<u64>, pools: Vec<PoolType>) -> Self::Stream;
 }

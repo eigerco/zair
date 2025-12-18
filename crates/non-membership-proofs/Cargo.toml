@@ -26,6 +26,7 @@ tokio = { workspace = true, features = [
   "io-util",
 ] }
 tonic = { workspace = true, features = ["tls-webpki-roots"] }
+tracing = { workspace = true }
 zcash_note_encryption = { workspace = true }
 zcash_primitives = { workspace = true }
 zcash_protocol = { workspace = true }

@@ -21,7 +21,7 @@ pub async fn get_nullifiers(config: &CommonArgs) -> eyre::Result<NullifierStream
             let source = LightWalletd::connect(&url).await?;
             Ok(Box::pin(
                 source
-                    .nullifiers_stream(&config.snapshot)
+                    .nullifiers_stream(&config.snapshot, vec![])
                     .map(|r| r.map_err(Into::into)),
             ))
         }
@@ -33,7 +33,7 @@ pub async fn get_nullifiers(config: &CommonArgs) -> eyre::Result<NullifierStream
             let source = FileSource::new(sapling.map(PathBuf::from), orchard.map(PathBuf::from));
             Ok(Box::pin(
                 source
-                    .nullifiers_stream(&config.snapshot)
+                    .nullifiers_stream(&config.snapshot, vec![])
                     .map(|r| r.map_err(Into::into)),
             ))
         }

@@ -2,14 +2,16 @@
 
 use std::ops::RangeInclusive;
 use std::pin::Pin;
+use std::time::Duration;
 
 use async_stream::try_stream;
 use futures_core::Stream;
 use light_wallet_api::compact_tx_streamer_client::CompactTxStreamerClient;
-use light_wallet_api::{BlockId, BlockRange};
+use light_wallet_api::{BlockId, BlockRange, PoolType};
 use orchard::keys::FullViewingKey as OrchardFvk;
 use sapling::zip32::DiversifiableFullViewingKey;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
+use tracing::warn;
 use zcash_protocol::TxId;
 use zcash_protocol::consensus::Parameters;
 
@@ -20,6 +22,21 @@ use crate::user_nullifiers::{
     UserNullifiers, ViewingKeys,
 };
 use crate::{Nullifier, Pool};
+
+/// Default connection timeout in seconds
+const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 10;
+/// Default request timeout in seconds
+const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
+/// Maximum number of retry attempts for transient errors
+const MAX_RETRIES: u32 = 3;
+/// Initial retry delay in milliseconds
+const INITIAL_RETRY_DELAY_MS: u64 = 1000;
+/// Maximum retry delay in milliseconds
+const MAX_RETRY_DELAY_MS: u64 = 10000;
+/// Multiplier for exponential backoff
+const BACKOFF_MULTIPLIER: u64 = 2;
+/// Timeout for receiving stream messages in seconds
+const STREAM_MESSAGE_TIMEOUT_SECS: u64 = 60;
 
 /// Errors that can occur when interacting with lightwalletd
 #[derive(Debug, thiserror::Error)]
@@ -43,6 +60,9 @@ pub enum LightWalletdError {
     /// Overflow error
     #[error("Overflow error")]
     OverflowError,
+    /// Stream message timeout
+    #[error("Stream message timeout after {0} seconds")]
+    StreamTimeout(u64),
 }
 
 /// A lightwalletd client
@@ -62,9 +82,97 @@ impl LightWalletd {
     ///
     /// Returns an error if the connection to the endpoint fails.
     pub async fn connect(endpoint: &str) -> Result<Self, LightWalletdError> {
-        let client = CompactTxStreamerClient::connect(endpoint.to_owned()).await?;
+        let channel = Endpoint::from_shared(endpoint.to_owned())?
+            .connect_timeout(Duration::from_secs(DEFAULT_CONNECT_TIMEOUT_SECS))
+            .timeout(Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS))
+            .connect()
+            .await?;
+
+        let client = CompactTxStreamerClient::new(channel);
 
         Ok(Self { client })
+    }
+}
+
+/// Determines if a gRPC error is transient and should be retried.
+///
+/// Retryable errors include:
+/// - `Unavailable`: Service temporarily unavailable
+/// - `ResourceExhausted`: Rate limiting or quota exceeded
+/// - `Aborted`: Operation aborted, typically due to concurrency issues
+/// - `DeadlineExceeded`: Request timeout (may succeed on retry)
+/// - `Unknown`: Unknown errors that might be transient
+fn is_retryable_grpc_error(status: &tonic::Status) -> bool {
+    use tonic::Code;
+    matches!(
+        status.code(),
+        Code::Unavailable |
+            Code::ResourceExhausted |
+            Code::Aborted |
+            Code::DeadlineExceeded |
+            Code::Unknown
+    )
+}
+
+/// Determines if a `LightWalletdError` is transient and should be retried.
+#[allow(
+    clippy::wildcard_enum_match_arm,
+    reason = "We are interested in specific variants only."
+)]
+fn is_retryable_error(error: &LightWalletdError) -> bool {
+    match error {
+        LightWalletdError::Grpc(status) => is_retryable_grpc_error(status),
+        LightWalletdError::Transport(_) => true, // Connection errors are often transient
+        _ => false,
+    }
+}
+
+/// Calculates the delay for exponential backoff.
+fn calculate_backoff_delay(attempt: u32) -> Duration {
+    let delay_ms =
+        INITIAL_RETRY_DELAY_MS.saturating_mul(BACKOFF_MULTIPLIER.saturating_pow(attempt));
+    Duration::from_millis(delay_ms.min(MAX_RETRY_DELAY_MS))
+}
+
+/// Retries an async operation with exponential backoff.
+///
+/// On transient errors (as determined by [`is_retryable_error`]), the operation
+/// is retried up to [`MAX_RETRIES`] times. Delays between attempts follow
+/// exponential backoff starting at [`INITIAL_RETRY_DELAY_MS`], multiplied by
+/// [`BACKOFF_MULTIPLIER`] each attempt, capped at [`MAX_RETRY_DELAY_MS`].
+///
+/// # Type Parameters
+///
+/// * `F` - A closure that produces the future to retry. Called once per attempt.
+/// * `Fut` - The future type returned by `F`.
+/// * `T` - The success type.
+/// * `E` - The error type, must be convertible to [`LightWalletdError`].
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "`attempt` can not overflow because it should always be less than `MAX_RETRIES`, which is far from the limits."
+)]
+async fn retry_with_backoff<F, Fut, T, E>(mut operation: F) -> Result<T, LightWalletdError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+    E: Into<LightWalletdError>,
+{
+    let mut attempt = 0;
+
+    loop {
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                let error = e.into();
+                if attempt < MAX_RETRIES && is_retryable_error(&error) {
+                    let delay = calculate_backoff_delay(attempt);
+                    tokio::time::sleep(delay).await;
+                    attempt += 1;
+                } else {
+                    return Err(error);
+                }
+            }
+        }
     }
 }
 
@@ -79,28 +187,43 @@ impl ChainNullifiers for LightWalletd {
     type Error = LightWalletdError;
     type Stream = Pin<Box<dyn Stream<Item = Result<PoolNullifier, Self::Error>> + Send>>;
 
-    fn nullifiers_stream(&self, range: &RangeInclusive<u64>) -> Self::Stream {
-        let request = BlockRange {
-            start: Some(BlockId {
-                height: *range.start(),
-                hash: vec![],
-            }),
-            end: Some(BlockId {
-                height: *range.end(),
-                hash: vec![],
-            }),
-            pool_types: vec![],
-        };
-
-        let mut client = self.client.clone();
+    fn nullifiers_stream(&self, range: &RangeInclusive<u64>, pools: Vec<PoolType>) -> Self::Stream {
+        let client = self.client.clone();
+        let range = range.clone();
 
         Box::pin(try_stream! {
-            let mut stream = client
-                .get_block_range(request)
-                .await?
-                .into_inner();
+            let mut stream = retry_with_backoff(|| {
+                let mut client = client.clone();
+                let request = BlockRange {
+                    start: Some(BlockId {
+                        height: *range.start(),
+                        hash: vec![],
+                    }),
+                    end: Some(BlockId {
+                        height: *range.end(),
+                        hash: vec![],
+                    }),
+                    pool_types: pools.iter().map(
+                            #[allow(clippy::as_conversions, reason = "PoolType is an enum with i32 representation.")]
+                            |p| {
+                                *p as i32
+                            }
+                        ).collect(),
+                };
+                async move { client.get_block_range(request).await.map(tonic::Response::into_inner) }
+            }).await?;
 
-            while let Some(block) = stream.message().await? {
+            let timeout_duration = Duration::from_secs(STREAM_MESSAGE_TIMEOUT_SECS);
+            loop {
+                let block = tokio::time::timeout(timeout_duration, stream.message())
+                    .await
+                    .map_err(|e| {
+                        warn!("Timeout receiving block from lightwalletd: {e}");
+                        LightWalletdError::StreamTimeout(STREAM_MESSAGE_TIMEOUT_SECS)
+                    })??;
+
+                let Some(block) = block else { break };
+
                 for tx in block.vtx {
                     // Sapling nullifiers
                     for spend in tx.spends {
@@ -142,21 +265,10 @@ impl UserNullifiers for LightWalletd {
         end_height: u64,
         orchard_fvk: &OrchardFvk,
         sapling_fvk: &DiversifiableFullViewingKey,
+        pools: Vec<PoolType>,
     ) -> Self::Stream {
         let network = network.clone();
-        let request = BlockRange {
-            start: Some(BlockId {
-                height: start_height,
-                hash: vec![],
-            }),
-            end: Some(BlockId {
-                height: end_height,
-                hash: vec![],
-            }),
-            pool_types: vec![],
-        };
-
-        let mut client = self.client.clone();
+        let client = self.client.clone();
 
         let sapling_viewing_keys = SaplingViewingKeys::from_dfvk(sapling_fvk);
         let orchard_viewing_keys = OrchardViewingKeys::from_fvk(orchard_fvk);
@@ -167,12 +279,38 @@ impl UserNullifiers for LightWalletd {
         };
 
         Box::pin(try_stream! {
-            let mut stream = client
-                .get_block_range(request)
-                .await?
-                .into_inner();
+            let mut stream = retry_with_backoff(|| {
+                let mut client = client.clone();
+                let request = BlockRange {
+                    start: Some(BlockId {
+                        height: start_height,
+                        hash: vec![],
+                    }),
+                    end: Some(BlockId {
+                        height: end_height,
+                        hash: vec![],
+                    }),
+                    pool_types: pools.iter().map(
+                            #[allow(clippy::as_conversions, reason = "PoolType is an enum with i32 representation.")]
+                            |p| {
+                                *p as i32
+                            }
+                        ).collect(),
+                };
+                async move { client.get_block_range(request).await.map(tonic::Response::into_inner) }
+            }).await?;
 
-            while let Some(block) = stream.message().await? {
+            let timeout_duration = Duration::from_secs(STREAM_MESSAGE_TIMEOUT_SECS);
+            loop {
+                let block = tokio::time::timeout(timeout_duration, stream.message())
+                    .await
+                    .map_err(|e| {
+                        warn!("Timeout receiving block from lightwalletd: {e}");
+                        LightWalletdError::StreamTimeout(STREAM_MESSAGE_TIMEOUT_SECS)
+                    })??;
+
+                let Some(block) = block else { break };
+
                 // Get the Sapling commitment tree size at the END of this block
                 // This is reported in chain_metadata
                 let sapling_tree_size_end = block

@@ -144,6 +144,7 @@ pub async fn airdrop_claim(
             *config.snapshot.end(),
             orchard_fvk,
             sapling_fvk,
+            vec![],
         )),
         Network::MainNetwork => Box::pin(lightwalletd.user_nullifiers::<MainNetwork>(
             &MainNetwork,
@@ -151,6 +152,7 @@ pub async fn airdrop_claim(
             *config.snapshot.end(),
             orchard_fvk,
             sapling_fvk,
+            vec![],
         )),
     };
 
