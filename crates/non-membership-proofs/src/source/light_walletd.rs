@@ -218,6 +218,7 @@ impl UserNullifiers for LightWalletd {
                                 note: SaplingNote {
                                     note: sapling_note.note,
                                     position,
+                                    scope: sapling_note.scope,
                                 },
                                 metadata: NoteMetadata {
                                     height: block.height,

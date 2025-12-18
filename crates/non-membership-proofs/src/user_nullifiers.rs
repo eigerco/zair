@@ -35,18 +35,15 @@ pub trait NoteNullifier: Sized {
     /// The viewing keys type for this note
     type ViewingKeys;
 
-    // TODO: review if the metadata parameter is necessary
-
     /// Derive the standard nullifier
-    fn nullifier(&self, keys: &Self::ViewingKeys, metadata: &NoteMetadata) -> [u8; 32];
+    fn nullifier(&self, keys: &Self::ViewingKeys) -> Nullifier;
 
     /// Derive the hiding nullifier
     fn hiding_nullifier(
         &self,
         keys: &Self::ViewingKeys,
-        metadata: &NoteMetadata,
         hiding: &Self::HidingFactor<'_>,
-    ) -> [u8; 32];
+    ) -> Nullifier;
 }
 
 /// Sapling hiding factor
@@ -72,24 +69,25 @@ pub struct SaplingNote {
     pub note: sapling::Note,
     /// Note position in the commitment tree
     pub position: u64,
+    /// Note scope (internal or external)
+    pub scope: Scope,
 }
 
 impl NoteNullifier for SaplingNote {
     type HidingFactor<'a> = SaplingHidingFactor<'a>;
     type ViewingKeys = SaplingViewingKeys;
 
-    fn nullifier(&self, keys: &Self::ViewingKeys, metadata: &NoteMetadata) -> [u8; 32] {
-        let nk = keys.nk(metadata.scope);
+    fn nullifier(&self, keys: &Self::ViewingKeys) -> Nullifier {
+        let nk = keys.nk(self.scope);
         self.note.nf(nk, self.position).0
     }
 
     fn hiding_nullifier(
         &self,
         keys: &Self::ViewingKeys,
-        metadata: &NoteMetadata,
         hiding: &Self::HidingFactor<'_>,
-    ) -> [u8; 32] {
-        let nk = keys.nk(metadata.scope);
+    ) -> Nullifier {
+        let nk = keys.nk(self.scope);
         self.note
             .nf_hiding(nk, self.position, hiding.personalization)
             .0
@@ -100,16 +98,15 @@ impl NoteNullifier for orchard::Note {
     type HidingFactor<'a> = OrchardHidingFactor<'a>;
     type ViewingKeys = OrchardViewingKeys;
 
-    fn nullifier(&self, keys: &Self::ViewingKeys, _metadata: &NoteMetadata) -> [u8; 32] {
+    fn nullifier(&self, keys: &Self::ViewingKeys) -> Nullifier {
         self.nullifier(&keys.fvk).to_bytes()
     }
 
     fn hiding_nullifier(
         &self,
         keys: &Self::ViewingKeys,
-        _metadata: &NoteMetadata,
         hiding: &Self::HidingFactor<'_>,
-    ) -> [u8; 32] {
+    ) -> Nullifier {
         self.hiding_nullifier(&keys.fvk, hiding.domain, hiding.tag)
             .to_bytes()
     }
@@ -136,8 +133,8 @@ impl<N: NoteNullifier + Debug> FoundNote<N> {
     }
 
     /// Derive the nullifier for this note
-    pub fn nullifier(&self, keys: &N::ViewingKeys) -> [u8; 32] {
-        self.note.nullifier(keys, &self.metadata)
+    pub fn nullifier(&self, keys: &N::ViewingKeys) -> Nullifier {
+        self.note.nullifier(keys)
     }
 
     /// Derive the hiding nullifier for this note
@@ -145,8 +142,8 @@ impl<N: NoteNullifier + Debug> FoundNote<N> {
         &self,
         keys: &N::ViewingKeys,
         hiding: &N::HidingFactor<'_>,
-    ) -> [u8; 32] {
-        self.note.hiding_nullifier(keys, &self.metadata, hiding)
+    ) -> Nullifier {
+        self.note.hiding_nullifier(keys, hiding)
     }
 }
 
