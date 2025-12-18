@@ -40,6 +40,7 @@
         cargo-expand # Expand macros in code
         cargo-hack
         cargo-machete # Check for unused dependencies
+        cargo-deny # Cargo plugin for linting your dependencies
 
         # General development tools
         git
