@@ -79,7 +79,7 @@ pub(crate) enum Commands {
         orchard_fvk: OrchardFvk,
 
         /// Sapling Diversifiable Full Viewing Key (hex-encoded, 128 bytes)
-        #[arg(short = 's', long, env = "DIVERSIFIABLE_FULL_VIEWING_KEY", value_parser = parse_sapling_fvk)]
+        #[arg(short = 's', long, env = "DIVERSIFIABLE_FULL_VIEWING_KEY", value_parser = parse_sapling_diversifiable_fvk)]
         sapling_fvk: DiversifiableFullViewingKey,
 
         /// Birthday height for the provided viewing keys
@@ -128,21 +128,6 @@ pub(crate) struct FileSourceArgs {
     #[arg(long, env = "ORCHARD_FILE")]
     pub orchard: Option<String>,
 }
-
-// impl std::str::FromStr for FileSourceArgs {
-//     type Err = eyre::Report;
-//
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         let (sapling, orchard) = s
-//             .split_once(',')
-//             .ok_or_else(|| eyre!("Expected format: sapling_path,orchard_path"))?;
-//
-//         Ok(Self {
-//             sapling: sapling.to_owned(),
-//             orchard: orchard.to_owned(),
-//         })
-//     }
-// }
 
 #[derive(Debug, Clone)]
 pub(crate) enum Source {
@@ -216,20 +201,15 @@ fn parse_orchard_fvk(hex: &str) -> Result<OrchardFvk> {
         .ok_or_else(|| eyre!("Invalid Orchard FVK: failed to parse 96-byte representation"))
 }
 
-/// Parse hex-encoded Sapling Full Viewing Key
-fn parse_sapling_fvk(hex: &str) -> Result<DiversifiableFullViewingKey> {
-    let bytes = hex::decode(hex).wrap_err("Failed to decode Sapling FVK from hex string")?;
+/// Parse hex-encoded Sapling Diversifiable Full Viewing Key
+fn parse_sapling_diversifiable_fvk(hex: &str) -> Result<DiversifiableFullViewingKey> {
+    let bytes =
+        hex::decode(hex).wrap_err("Failed to decode Sapling Diversifiable FVK from hex string")?;
 
-    ensure!(
-        bytes.len() == 128,
-        "Invalid Sapling FVK length: expected 128 bytes, got {} bytes",
+    let bytes: &[u8; 128] = bytes.as_slice().try_into().wrap_err(format!(
+        "Slice conversion error, bytes len: {}",
         bytes.len()
-    );
-
-    let bytes: &[u8; 128] = bytes
-        .as_slice()
-        .try_into()
-        .wrap_err("Slice conversion error")?;
+    ))?;
 
     DiversifiableFullViewingKey::from_bytes(bytes)
         .ok_or_else(|| eyre!("Invalid Sapling FVK: failed to parse 128-byte representation"))

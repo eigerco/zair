@@ -50,8 +50,9 @@ impl ChainNullifiers for FileSource {
     type Error = io::Error;
     type Stream = Pin<Box<dyn Stream<Item = Result<PoolNullifier, Self::Error>> + Send>>;
 
-    /// Read nullifiers from the specified files
-    /// range is ignored since files contain all nullifiers
+    /// Read nullifiers from the specified files.
+    /// `_range` is ignored because files can not interruct with the network.
+    /// If a file is provided all nullifiers are consider as part of the snapshot.
     fn nullifiers_stream(&self, _range: &RangeInclusive<u64>) -> Self::Stream {
         let sapling_path = self.sapling_path.clone();
         let orchard_path = self.orchard_path.clone();

@@ -148,24 +148,24 @@ pub fn build_leaf(nf1: &Nullifier, nf2: &Nullifier) -> [u8; 2 * NULLIFIER_SIZE] 
     leaf
 }
 
-/// Write leaf notes to binary file without intermediate allocation
+/// Write nullifi to binary file without intermediate allocation
 ///
 /// # Errors
 /// If writing to the file fails
-pub async fn write_raw_nullifiers<P>(notes: &[Nullifier], path: P) -> std::io::Result<()>
+pub async fn write_raw_nullifiers<P>(nullifiers: &[Nullifier], path: P) -> std::io::Result<()>
 where
     P: AsRef<Path>,
 {
     let file = File::create(path).await?;
     let mut writer = BufWriter::with_capacity(BUF_SIZE, file);
 
-    writer.write_all(bytemuck::cast_slice(notes)).await?;
+    writer.write_all(bytemuck::cast_slice(nullifiers)).await?;
     writer.flush().await?;
 
     Ok(())
 }
 
-/// Read leaf notes from binary file without intermediate allocation
+/// Read nullifiers from binary file without intermediate allocation
 ///
 /// # Errors
 /// If reading from the file fails

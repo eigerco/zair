@@ -233,11 +233,6 @@ pub(crate) async fn airdrop_claim(
 
             generate_non_membership_proof::<Sha256>(note, nullifiers, tree, &viewing_keys)
                 .transpose()
-            // match generate_non_membership_proof::<Sha256>(note, nullifiers, tree, &viewing_keys)
-            // {     Ok(Some(proof)) => Some(Ok(proof)),
-            //     Ok(None) => None,
-            //     Err(e) => Some(Err(e)),
-            // }
         })
         .collect::<Vec<_>>();
 
