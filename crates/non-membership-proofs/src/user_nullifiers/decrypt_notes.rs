@@ -94,7 +94,6 @@ pub struct ViewingKeys {
 /// # Arguments
 /// * `block` - The `CompactBlock` from lightwalletd
 /// * `keys` - Viewing keys for Sapling and/or Orchard
-/// * `zip212_enforcement` - ZIP-212 enforcement mode (On for blocks after Canopy)
 ///
 /// # Returns
 /// Vector of decrypted notes found in the block
