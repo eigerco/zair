@@ -45,6 +45,17 @@ This produces:
 - `sapling-nullifiers-testnet.bin` — Sapling pool snapshot nullifiers
 - `orchard-nullifiers-testnet.bin` — Orchard pool snapshot nullifiers
 
+**Parameters of `build-airdrop-configuration` explained:**
+
+| Parameter                       | Description                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| `--network`                     | Network to use (`mainnet` or `testnet`). Default: `mainnet`                           |
+| `--snapshot`                    | Block height range for the airdrop snapshot (e.g., `280000..=3743871`)                |
+| `--lightwalletd-url`            | URL of a lightwalletd server to fetch nullifiers from                                 |
+| `--configuration-output-file`   | Output path for the airdrop configuration JSON. Default: `airdrop_configuration.json` |
+| `--sapling-snapshot-nullifiers` | Output path for Sapling nullifiers file. Default: `sapling-snapshot-nullifiers.bin`   |
+| `--orchard-snapshot-nullifiers` | Output path for Orchard nullifiers file. Default: `orchard-snapshot-nullifiers.bin`   |
+
 > **For organizers**: Run this to generate the official Merkle roots and publish them along with the snapshot files.
 >
 > **For users**: Run this yourself to fetch the nullifiers, or download the snapshot files published by the airdrop organizers.
@@ -84,6 +95,12 @@ If you don't have your viewing key, the `mnemonic-to-fvks` utility can derive it
 mnemonic-to-fvks --network mainnet
 ```
 
+**Parameters of `mnemonic-to-fvks` explained:**
+
+| Parameter   | Description                                                 |
+| ----------- | ----------------------------------------------------------- |
+| `--network` | Network to use (`mainnet` or `testnet`). Default: `mainnet` |
+
 The tool will securely prompt for:
 
 - Your 24-word mnemonic
@@ -121,10 +138,11 @@ This command will:
 3. For each unspent note found, generate a non-membership proof
 4. Output the proofs to `my_claims.json`
 
-**Parameters explained:**
+**Parameters of `airdrop-claim` explained:**
 
 | Parameter                       | Description                                                  |
 | ------------------------------- | ------------------------------------------------------------ |
+| `--network`                     | Network to use (`mainnet` or `testnet`)                      |
 | `--snapshot`                    | Block height range for the airdrop snapshot                  |
 | `--lightwalletd-url`            | URL of a lightwalletd server to scan the chain               |
 | `--sapling-snapshot-nullifiers` | Path to the Sapling nullifiers snapshot file                 |
@@ -167,13 +185,15 @@ Instead of passing arguments on the command line, you can use environment variab
 
 | Variable                      | Description                                              |
 | ----------------------------- | -------------------------------------------------------- |
-| `NETWORK`                     | Network to use (`mainnet` or `testnet`)                  |
-| `LIGHTWALLETD_URL`            | Lightwalletd gRPC endpoint URL                           |
-| `SAPLING_SNAPSHOT_NULLIFIERS` | Path to Sapling nullifiers file                          |
-| `ORCHARD_SNAPSHOT_NULLIFIERS` | Path to Orchard nullifiers file                          |
-| `AIRDROP_CONFIGURATION_FILE`  | Path to airdrop configuration JSON                       |
 | `AIRDROP_CLAIMS_OUTPUT_FILE`  | Path to write the valid airdrop claims to this JSON file |
+| `AIRDROP_CONFIGURATION_FILE`  | Path to airdrop configuration JSON                       |
 | `BIRTHDAY_HEIGHT`             | Birthday height for the provided viewing keys            |
+| `CONFIGURATION_OUTPUT_FILE`   | Output path for airdrop configuration JSON               |
+| `LIGHTWALLETD_URL`            | Lightwalletd gRPC endpoint URL                           |
+| `NETWORK`                     | Network to use (`mainnet` or `testnet`)                  |
+| `ORCHARD_SNAPSHOT_NULLIFIERS` | Path to Orchard nullifiers file                          |
+| `SAPLING_SNAPSHOT_NULLIFIERS` | Path to Sapling nullifiers file                          |
+| `SNAPSHOT`                    | Block range for the snapshot (e.g., `280000..=3743871`)  |
 
 ## Troubleshooting
 
