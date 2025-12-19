@@ -53,10 +53,7 @@ impl ChainNullifiers for FileSource {
     /// Read nullifiers from the specified files.
     /// `_range` is ignored because files can not interruct with the network.
     /// If a file is provided all nullifiers are consider as part of the snapshot.
-    fn nullifiers_stream(
-        &self,
-        _range: &RangeInclusive<u64>,
-    ) -> Self::Stream {
+    fn nullifiers_stream(&self, _range: &RangeInclusive<u64>) -> Self::Stream {
         let sapling_path = self.sapling_path.clone();
         let orchard_path = self.orchard_path.clone();
 
