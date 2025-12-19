@@ -30,7 +30,7 @@ Run `build-airdrop-configuration` to:
 3. Export snapshot files and a configuration JSON with Merkle roots
 
 ```bash
-cargo run --release -p airdrop -- build-airdrop-configuration \
+airdrop build-airdrop-configuration \
   --snapshot 280000..=3743871 \
   --network testnet \
   --lightwalletd-url https://testnet.zec.rocks:443 \
@@ -102,7 +102,7 @@ It outputs:
 Download the snapshot files published by the airdrop organizer, then run `airdrop-claim` with your viewing keys:
 
 ```bash
-cargo run --release -p airdrop -- airdrop-claim \
+airdrop airdrop-claim \
   --network testnet \
   --snapshot 280000..=3743871 \
   --lightwalletd-url https://testnet.zec.rocks:443 \
