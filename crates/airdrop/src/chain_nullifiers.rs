@@ -1,3 +1,5 @@
+//! Module for loading chain nullifiers from various sources.
+
 use std::path::Path;
 #[cfg(feature = "file-source")]
 use std::path::PathBuf;

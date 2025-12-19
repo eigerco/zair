@@ -35,18 +35,27 @@ pub enum DecryptedNote {
     Orchard(DecryptedOrchardNote),
 }
 
+/// A decrypted Sapling note
 #[derive(Debug, Clone)]
 pub struct DecryptedSaplingNote {
+    /// Index of the transaction in the block
     pub tx_index: usize,
+    /// Index of the output in the transaction
     pub output_index: usize,
+    /// The decrypted Sapling note
     pub note: sapling::Note,
+    /// The scope (external or internal) of the note
     pub scope: Scope,
 }
 
+/// A decrypted Orchard note
 #[derive(Debug, Clone)]
 pub struct DecryptedOrchardNote {
+    /// Index of the transaction in the block
     pub tx_index: usize,
+    /// The decrypted Orchard note
     pub note: OrchardNote,
+    /// The scope (external or internal) of the note
     pub scope: Scope,
 }
 

@@ -1,3 +1,10 @@
+//! CLI command implementations for the airdrop crate.
+//!
+//! This module contains the core logic for each CLI subcommand.
+//!
+//! These commands interact with lightwalletd, process nullifiers for Sapling and Orchard pools,
+//! and ensure data integrity for the airdrop process.
+
 use std::path::PathBuf;
 use std::str::FromStr as _;
 
@@ -52,9 +59,9 @@ pub async fn build_airdrop_configuration(
     let orchard_root = orchard_root?;
 
     AirdropConfiguration::new(
+        config.snapshot,
         sapling_root.as_deref(),
         orchard_root.as_deref(),
-        config.snapshot,
     )
     .export_config(&configuration_output_file)
     .await?;

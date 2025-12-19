@@ -88,6 +88,7 @@ pub enum Commands {
     AirdropConfigurationSchema,
 }
 
+/// Common arguments for both commands
 #[derive(Debug, clap::Args)]
 pub struct CommonArgs {
     /// Network to use (mainnet or testnet)
@@ -102,6 +103,7 @@ pub struct CommonArgs {
     pub source: SourceArgs,
 }
 
+/// Source of nullifiers for building the snapshot
 #[derive(Debug, Clone, clap::Args)]
 pub struct SourceArgs {
     /// Lightwalletd gRPC endpoint URL
@@ -127,12 +129,15 @@ pub struct FileSourceArgs {
     pub orchard_input: Option<String>,
 }
 
+/// Source of nullifiers for building the snapshot
 #[derive(Debug, Clone)]
 pub enum Source {
+    /// Lightwalletd gRPC source
     Lightwalletd {
         url: String,
     },
     #[cfg(feature = "file-source")]
+    /// File-based source (for development/testing)
     File {
         orchard: Option<String>,
         sapling: Option<String>,
