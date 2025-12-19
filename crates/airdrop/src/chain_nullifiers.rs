@@ -1,4 +1,6 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(feature = "file-source")]
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::str::FromStr as _;
 
@@ -6,6 +8,7 @@ use eyre::Context;
 use futures::{Stream, StreamExt as _};
 use http::Uri;
 use non_membership_proofs::chain_nullifiers::{ChainNullifiers as _, PoolNullifier};
+#[cfg(feature = "file-source")]
 use non_membership_proofs::source::file::FileSource;
 use non_membership_proofs::source::light_walletd::LightWalletd;
 use tracing::{debug, instrument};
@@ -29,6 +32,7 @@ pub async fn get_nullifiers(config: &CommonArgs) -> eyre::Result<NullifierStream
                     .map(|r| r.map_err(Into::into)),
             ))
         }
+        #[cfg(feature = "file-source")]
         Source::File { orchard, sapling } => {
             debug!(
                 "Loading nullifiers from files: sapling={:?}, orchard={:?}",

@@ -52,6 +52,7 @@ pub enum Commands {
     /// 1. Build the nullifiers non-membership proof Merkle trees from the snapshot nullifiers.
     /// 2. Scan the chain for notes belonging to the provided viewing keys.
     /// 3. Output the non-membership proofs
+    #[command(verbatim_doc_comment)]
     AirdropClaim {
         #[command(flatten)]
         config: CommonArgs,
@@ -64,6 +65,7 @@ pub enum Commands {
         #[arg(long, env = "ORCHARD_SNAPSHOT_NULLIFIERS")]
         orchard_snapshot_nullifiers: Option<PathBuf>,
 
+        /// Unified Full Viewing Key to scan for notes
         #[arg(long)]
         unified_full_viewing_key: String,
 
@@ -79,7 +81,8 @@ pub enum Commands {
         )]
         airdrop_claims_output_file: PathBuf,
     },
-    AirdropConfigurationSchema
+    /// Prints the schema of the airdrop configuration JSON file
+    AirdropConfigurationSchema,
 }
 
 #[derive(Debug, clap::Args)]
@@ -102,15 +105,21 @@ pub struct SourceArgs {
     #[arg(long, env = "LIGHTWALLETD_URL")]
     pub lightwalletd_url: Option<String>,
 
-    /// Input files in format
+    /// File-based nullifier input (only available with `file-source` feature)
+    #[cfg(feature = "file-source")]
     #[command(flatten)]
     pub input_files: Option<FileSourceArgs>,
 }
 
+/// File-based nullifier source arguments (for development/testing).
+/// Only available when compiled with `--features file-source`.
+#[cfg(feature = "file-source")]
 #[derive(Debug, Clone, clap::Args)]
 pub struct FileSourceArgs {
+    /// Sapling nullifiers input file
     #[arg(long, env = "SAPLING_INPUT_FILE")]
     pub sapling_input: Option<String>,
+    /// Orchard nullifiers input file
     #[arg(long, env = "ORCHARD_INPUT_FILE")]
     pub orchard_input: Option<String>,
 }
@@ -120,6 +129,7 @@ pub enum Source {
     Lightwalletd {
         url: String,
     },
+    #[cfg(feature = "file-source")]
     File {
         orchard: Option<String>,
         sapling: Option<String>,
@@ -129,6 +139,7 @@ pub enum Source {
 impl TryFrom<SourceArgs> for Source {
     type Error = eyre::Report;
 
+    #[cfg(feature = "file-source")]
     fn try_from(args: SourceArgs) -> Result<Self, Self::Error> {
         match (args.lightwalletd_url, args.input_files) {
             (Some(url), None) => Ok(Self::Lightwalletd { url }),
@@ -137,12 +148,19 @@ impl TryFrom<SourceArgs> for Source {
                 sapling: files.sapling_input,
             }),
             (None, None) => Err(eyre!(
-                "No source specified. Provide --lightwalletd-url OR input files using --sapling-file and/or --orchard-file."
+                "No source specified. Provide --lightwalletd-url OR input files (--sapling-input/--orchard-input with file-source feature)."
             )),
             (Some(_), Some(_)) => Err(eyre!(
                 "Cannot specify both --lightwalletd-url and input files. Choose one source."
             )),
         }
+    }
+
+    #[cfg(not(feature = "file-source"))]
+    fn try_from(args: SourceArgs) -> Result<Self, Self::Error> {
+        args.lightwalletd_url
+            .map(|url| Self::Lightwalletd { url })
+            .ok_or_else(|| eyre!("No source specified. Provide --lightwalletd-url."))
     }
 }
 

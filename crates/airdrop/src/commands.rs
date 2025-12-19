@@ -121,6 +121,12 @@ pub async fn airdrop_claim(
         "Birthday height cannot be greater than the snapshot end height"
     );
 
+    #[cfg(feature = "file-source")]
+    ensure!(
+        config.source.input_files.is_none(),
+        "Airdrop claims can only be generated using lightwalletd as the source"
+    );
+
     let lightwalletd_url = config
         .source
         .lightwalletd_url
@@ -301,9 +307,9 @@ where
 
 #[instrument]
 pub async fn airdrop_configuration_schema() -> eyre::Result<()> {
-        let schema = airdrop_configuration::AirdropConfiguration::schema();
-        let schema_str = serde_json::to_string_pretty(&schema)?;
-        println!("Airdrop Configuration JSON Schema: {}", schema_str);
+    let schema = airdrop_configuration::AirdropConfiguration::schema();
+    let schema_str = serde_json::to_string_pretty(&schema)?;
+    println!("Airdrop Configuration JSON Schema:\n{schema_str}");
 
     Ok(())
 }

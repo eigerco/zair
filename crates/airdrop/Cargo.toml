@@ -7,6 +7,8 @@ license = "MIT"
 [features]
 default = []
 tokio-console = ["dep:console-subscriber"]
+## Enable file-based nullifier input (for development/testing)
+file-source = []
 
 [dependencies]
 clap = { workspace = true, features = ["derive", "env"] }
