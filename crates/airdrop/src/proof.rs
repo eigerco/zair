@@ -123,7 +123,8 @@ pub fn generate_non_membership_proof<H: Hasher>(
 ///
 /// * `nullifier` - The nullifier to prove non-membership for (any valid 32-byte value).
 /// * `snapshot_nullifiers` - A sorted slice of nullifiers from the snapshot.
-/// * `merkle_tree` - A Merkle tree built from `snapshot_nullifiers` using [`build_merkle_tree`].
+/// * `merkle_tree` - A Merkle tree built from `snapshot_nullifiers` using
+///   [`non_membership_proofs::build_merkle_tree`].
 ///
 /// # Preconditions
 ///
