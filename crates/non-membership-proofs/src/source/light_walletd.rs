@@ -197,7 +197,7 @@ impl ChainNullifiers for LightWalletd {
     type Error = LightWalletdError;
     type Stream = Pin<Box<dyn Stream<Item = Result<PoolNullifier, Self::Error>> + Send>>;
 
-    fn nullifiers_stream(&self, range: &RangeInclusive<u64>, pools: Vec<PoolType>) -> Self::Stream {
+    fn nullifiers_stream(&self, range: &RangeInclusive<u64>) -> Self::Stream {
         let client = self.client.clone();
         let range = range.clone();
 
@@ -213,12 +213,7 @@ impl ChainNullifiers for LightWalletd {
                         height: *range.end(),
                         hash: vec![],
                     }),
-                    pool_types: pools.iter().map(
-                            #[allow(clippy::as_conversions, reason = "PoolType is an enum with i32 representation.")]
-                            |p| {
-                                *p as i32
-                            }
-                        ).collect(),
+                    pool_types: vec![],
                 };
                 async move { client.get_block_range(request).await.map(tonic::Response::into_inner) }
             }).await?;

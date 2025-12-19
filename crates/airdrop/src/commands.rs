@@ -61,6 +61,7 @@ pub async fn build_airdrop_configuration(
     Ok(())
 }
 
+#[instrument(skip_all, fields(pool = %pool, store = %store.display()))]
 async fn process_pool<H>(
     pool: &str,
     mut nullifiers: Vec<Nullifier>,
@@ -75,7 +76,7 @@ where
         return Ok(None);
     }
 
-    info!(pool, count = nullifiers.len(), "Collected nullifiers");
+    info!(count = nullifiers.len(), "Collected nullifiers");
 
     nullifiers.sort_unstable();
 
@@ -122,16 +123,16 @@ pub async fn airdrop_claim(
     let lightwalletd_url = config
         .source
         .lightwalletd_url
-        .as_ref()
-        .context("lightwalletd URL is required")?;
+        .as_deref()
+        .map(Uri::from_str)
+        .context("lightwalletd URL is required")??;
 
     let sapling = airdrop_claim_merkle_tree("sapling", sapling_snapshot_nullifiers);
     let orchard = airdrop_claim_merkle_tree("orchard", orchard_snapshot_nullifiers);
     let (sapling_result, orchard_result) = tokio::try_join!(sapling, orchard)?;
 
     // Connect to lightwalletd
-    let uri = Uri::from_str(lightwalletd_url)?;
-    let lightwalletd = LightWalletd::connect(uri).await?;
+    let lightwalletd = LightWalletd::connect(lightwalletd_url).await?;
 
     let viewing_keys = ViewingKeys {
         sapling: Some(SaplingViewingKeys::from_dfvk(sapling_fvk)),
@@ -265,6 +266,7 @@ pub async fn airdrop_claim(
     Ok(())
 }
 
+#[instrument]
 async fn airdrop_claim_merkle_tree<H>(
     pool: &str,
     snapshot_nullifiers: Option<PathBuf>,

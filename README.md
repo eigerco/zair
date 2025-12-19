@@ -60,7 +60,7 @@ The workspace also uses `pre-commit` checks. These can be removed if they prove 
 
 ### mnemonic-to-fvks
 
-- **Description**: A utility to convert a Zcash mnemonic to Full Viewing Keys. Supports Orchard and Sapling pools. Run with `--help` to check the usage.
+- **Description**: A utility to convert a Zcash mnemonic to Full Viewing Keys. Outputs the Unified Full Viewing Key in human-readable Bech32 format (e.g., `uview1...`), as well as the individual Orchard and Sapling keys in hex format. Run with `--help` to check the usage.
 
 ### light-wallet-api
 

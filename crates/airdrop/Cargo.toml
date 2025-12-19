@@ -33,6 +33,7 @@ tokio = { workspace = true, features = [
 ] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+zcash_keys = { workspace = true, features = ["orchard", "sapling"] }
 zcash_protocol = { workspace = true }
 
 [lints]

@@ -20,7 +20,7 @@ fn parse_network(s: &str) -> Result<Network> {
     match s.to_lowercase().as_str() {
         "mainnet" => Ok(Network::MainNetwork),
         "testnet" => Ok(Network::TestNetwork),
-        _ => bail!("Invalid network type: {s}. Use 'mainnet', 'testnet', or 'regtest'."),
+        _ => bail!("Invalid network type: {s}. Use 'mainnet' or 'testnet'."),
     }
 }
 
@@ -69,6 +69,10 @@ fn main() -> Result<()> {
     println!("\n{}", "=".repeat(50));
     println!("  ZCASH KEYS (Network: {:?})", cli.network);
     println!("\n{}", "=".repeat(50));
+
+    // Human-readable Unified Full Viewing Key (Bech32 encoded)
+    println!("\n📋 UNIFIED FULL VIEWING KEY (Human-readable)\n");
+    println!("  {}\n", keys.ufvk.encode(&cli.network));
 
     println!("🧐 FULL VIEWING KEYS (Safe to share - view only)\n");
     println!("Orchard FVK:");

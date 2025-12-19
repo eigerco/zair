@@ -61,6 +61,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zcash_keys",
  "zcash_protocol",
 ]
 

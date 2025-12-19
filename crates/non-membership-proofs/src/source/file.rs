@@ -15,7 +15,6 @@ use std::pin::Pin;
 
 use async_stream::try_stream;
 use futures_core::Stream;
-use light_wallet_api::PoolType;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt as _, BufReader};
 
@@ -57,7 +56,6 @@ impl ChainNullifiers for FileSource {
     fn nullifiers_stream(
         &self,
         _range: &RangeInclusive<u64>,
-        pools: Vec<PoolType>,
     ) -> Self::Stream {
         let sapling_path = self.sapling_path.clone();
         let orchard_path = self.orchard_path.clone();

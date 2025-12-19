@@ -4,7 +4,6 @@
 use std::ops::RangeInclusive;
 
 use futures_core::Stream;
-use light_wallet_api::PoolType;
 
 use crate::{Nullifier, Pool};
 
@@ -37,5 +36,5 @@ pub trait ChainNullifiers: Sized {
     ///
     /// Dropping the stream cancels the operation. See individual implementations
     /// for details on cleanup behavior.
-    fn nullifiers_stream(&self, range: &RangeInclusive<u64>, pools: Vec<PoolType>) -> Self::Stream;
+    fn nullifiers_stream(&self, range: &RangeInclusive<u64>) -> Self::Stream;
 }

@@ -30,12 +30,13 @@ Run `build-airdrop-configuration` to:
 3. Export snapshot files and a configuration JSON with Merkle roots
 
 ```bash
-airdrop build-airdrop-configuration \
-  --snapshot 419200..=2500000 \
-  --lightwalletd-url https://lightwalletd.example.com \
+cargo run --release -p airdrop -- build-airdrop-configuration \
+  --snapshot 280000..=3743871 \
+  --network testnet \
+  --lightwalletd-url https://testnet.zec.rocks:443 \
   --configuration-output-file airdrop_configuration.json \
-  --sapling-snapshot-nullifiers sapling-nullifiers.bin \
-  --orchard-snapshot-nullifiers orchard-nullifiers.bin
+  --sapling-snapshot-nullifiers sapling-nullifiers-testnet.bin \
+  --orchard-snapshot-nullifiers orchard-nullifiers-testnet.bin
 ```
 
 This produces:
@@ -66,18 +67,18 @@ The `.bin` snapshot files use a simple binary format:
 
 ### Step 2: Obtain Your Viewing Keys
 
-To scan for your notes, you need your Full Viewing Keys (FVKs). If you already have your viewing keys, you can skip to Step 3.
+To scan for your notes, you need your Unified Full Viewing Key (UFVK). If you already have your viewing key, you can skip to Step 3.
 
 #### Viewing Key Format
 
-The `airdrop` CLI expects viewing keys as **hex-encoded bytes**:
+The `airdrop` CLI expects a **Unified Full Viewing Key** in Bech32 format:
 
-- **Orchard FVK**: 96 bytes → 192 hex characters
-- **Sapling Diversifiable FVK**: 128 bytes → 256 hex characters
+- **Mainnet**: starts with `uview1...`
+- **Testnet**: starts with `uviewtest1...`
 
 #### Helper Utility: `mnemonic-to-fvks`
 
-If you don't have your viewing keys, the `mnemonic-to-fvks` utility can derive them from your wallet's mnemonic seed phrase:
+If you don't have your viewing key, the `mnemonic-to-fvks` utility can derive it from your wallet's mnemonic seed phrase:
 
 ```bash
 mnemonic-to-fvks --network mainnet
@@ -89,23 +90,26 @@ The tool will securely prompt for:
 - Optional passphrase (press Enter if none)
 - Account index (default: 0)
 
-It outputs your Orchard and Sapling FVKs in the required hex format.
+It outputs:
 
-> **Security Note**: Keep your mnemonic secure. The FVKs themselves cannot spend funds but can reveal your transaction history.
+1. **Unified Full Viewing Key** — Human-readable Bech32 format (use this with `--unified-full-viewing-key`)
+2. **Individual keys** — Hex-encoded Orchard and Sapling FVKs (for debugging/advanced use)
+
+> **Security Note**: Keep your mnemonic secure. The viewing keys cannot spend funds but can reveal your transaction history.
 
 ### Step 3: Users Generate Their Claims
 
 Download the snapshot files published by the airdrop organizer, then run `airdrop-claim` with your viewing keys:
 
 ```bash
-airdrop airdrop-claim \
-  --snapshot 419200..=2500000 \
-  --lightwalletd-url https://lightwalletd.example.com \
-  --sapling-snapshot-nullifiers sapling-nullifiers.bin \
-  --orchard-snapshot-nullifiers orchard-nullifiers.bin \
-  --sapling-fvk "zxviews1..." \
-  --orchard-fvk "zxviewo1..." \
-  --birthday-height 1900000 \
+cargo run --release -p airdrop -- airdrop-claim \
+  --network testnet \
+  --snapshot 280000..=3743871 \
+  --lightwalletd-url https://testnet.zec.rocks:443 \
+  --sapling-snapshot-nullifiers ./binaries/sapling-nullifiers-testnet.bin \
+  --orchard-snapshot-nullifiers ./binaries/orchard-nullifiers-testnet.bin \
+  --unified-full-viewing-key  uviewtest1kfhkx5fphx2ahhnpsme4sqsvx04nzuryd6vhd79rs2uv7x23gvtzlfvjq0r705kucmqcl9yf50nglmsn60c0chd8x94lnfa6s46fhdpvlv9lc33l76j32t62ucl0l70yxh2r77nqunawcxexjcg8gldmepqc9nufnn386ftas9xjalcrl3y8jycgtq6xq8lrvqm47hhrsqjcrm8e8pv7u595ma8dzdnps83fwspsvadz4dztsw8e9lwsvphzfglx0zxy32jyl7xcxhxnzw0lp5kzcpzjvwwwh3l80g9vdn7gfaj6927sg8m57gpafvj0wgu3upjdj63mxvxwd8qezcnvzlsd938dfaujm0usgz93gkk4cm60ejrj8zfckse2w7gaf8cj0n6k5 \
+  --birthday-height 3663119 \
   --airdrop-claims-output-file my_claims.json
 ```
 
@@ -123,8 +127,7 @@ This command will:
 | `--lightwalletd-url`            | URL of a lightwalletd server to scan the chain               |
 | `--sapling-snapshot-nullifiers` | Path to the Sapling nullifiers snapshot file                 |
 | `--orchard-snapshot-nullifiers` | Path to the Orchard nullifiers snapshot file                 |
-| `--sapling-fvk`                 | Your Sapling Full Viewing Key                                |
-| `--orchard-fvk`                 | Your Orchard Full Viewing Key                                |
+| `--unified-full-viewing-key`    | Your Unified Full Viewing Key in Bech32 format               |
 | `--birthday-height`             | The block height when your wallet was created (optimization) |
 | `--airdrop-claims-output-file`  | Output file for your claim proofs                            |
 

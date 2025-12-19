@@ -1,6 +1,8 @@
 //! Airdrop CLI Application
 
 use clap::Parser as _;
+use zcash_keys::keys::UnifiedFullViewingKey;
+
 
 use crate::cli::{Cli, Commands, CommonArgs};
 use crate::commands::{airdrop_claim, build_airdrop_configuration};
@@ -88,17 +90,27 @@ async fn main() -> eyre::Result<()> {
             config,
             sapling_snapshot_nullifiers,
             orchard_snapshot_nullifiers,
-            orchard_fvk,
-            sapling_fvk,
+            unified_full_viewing_key,
             birthday_height,
             airdrop_claims_output_file,
         } => {
+            let ufvk = UnifiedFullViewingKey::decode(&config.network, &unified_full_viewing_key)
+                .map_err(|e| eyre::eyre!("Failed to decode Unified Full Viewing Key: {:?}", e))?;
+
+            let orchard_fvk = ufvk.orchard().ok_or_else(|| {
+                eyre::eyre!("Unified Full Viewing Key does not contain an Orchard FVK")
+            })?;
+
+            let sapling_fvk = ufvk.sapling().ok_or_else(|| {
+                eyre::eyre!("Unified Full Viewing Key does not contain a Sapling FVK")
+            })?;
+
             airdrop_claim(
                 config,
                 sapling_snapshot_nullifiers,
                 orchard_snapshot_nullifiers,
-                &orchard_fvk,
-                &sapling_fvk,
+                orchard_fvk,
+                sapling_fvk,
                 birthday_height,
                 airdrop_claims_output_file,
             )
