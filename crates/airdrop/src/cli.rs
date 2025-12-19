@@ -133,9 +133,7 @@ pub struct FileSourceArgs {
 #[derive(Debug, Clone)]
 pub enum Source {
     /// Lightwalletd gRPC source
-    Lightwalletd {
-        url: String,
-    },
+    Lightwalletd { url: String },
     #[cfg(feature = "file-source")]
     /// File-based source (for development/testing)
     File {

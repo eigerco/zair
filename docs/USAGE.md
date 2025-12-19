@@ -42,8 +42,8 @@ airdrop build-airdrop-configuration \
 This produces:
 
 - `airdrop_configuration.json` — Contains Merkle roots for verification
-- `sapling-nullifiers.bin` — Sapling pool snapshot nullifiers
-- `orchard-nullifiers.bin` — Orchard pool snapshot nullifiers
+- `sapling-nullifiers-testnet.bin` — Sapling pool snapshot nullifiers
+- `orchard-nullifiers-testnet.bin` — Orchard pool snapshot nullifiers
 
 > **For organizers**: Run this to generate the official Merkle roots and publish them along with the snapshot files.
 >
@@ -149,17 +149,31 @@ The output `my_claims.json` contains non-membership proofs that can be verified 
 | Reveals which specific notes you own             | No         |
 | Requires spending or moving your funds           | No         |
 
+## Utilities
+
+### View Configuration Schema
+
+To view the JSON schema for the airdrop configuration file:
+
+```bash
+airdrop airdrop-configuration-schema
+```
+
+This prints the JSON schema describing the structure of the airdrop configuration file that is produced from `build-airdrop-configuration` subcommand.
+
 ## Environment Variables
 
 Instead of passing arguments on the command line, you can use environment variables or a `.env` file:
 
-| Variable                      | Description                             |
-| ----------------------------- | --------------------------------------- |
-| `NETWORK`                     | Network to use (`mainnet` or `testnet`) |
-| `LIGHTWALLETD_URL`            | Lightwalletd gRPC endpoint URL          |
-| `SAPLING_SNAPSHOT_NULLIFIERS` | Path to Sapling nullifiers file         |
-| `ORCHARD_SNAPSHOT_NULLIFIERS` | Path to Orchard nullifiers file         |
-| `AIRDROP_CONFIGURATION_FILE`  | Path to airdrop configuration JSON      |
+| Variable                      | Description                                              |
+| ----------------------------- | -------------------------------------------------------- |
+| `NETWORK`                     | Network to use (`mainnet` or `testnet`)                  |
+| `LIGHTWALLETD_URL`            | Lightwalletd gRPC endpoint URL                           |
+| `SAPLING_SNAPSHOT_NULLIFIERS` | Path to Sapling nullifiers file                          |
+| `ORCHARD_SNAPSHOT_NULLIFIERS` | Path to Orchard nullifiers file                          |
+| `AIRDROP_CONFIGURATION_FILE`  | Path to airdrop configuration JSON                       |
+| `AIRDROP_CLAIMS_OUTPUT_FILE`  | Path to write the valid airdrop claims to this JSON file |
+| `BIRTHDAY_HEIGHT`             | Birthday height for the provided viewing keys            |
 
 ## Troubleshooting
 
