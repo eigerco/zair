@@ -11,7 +11,7 @@ use zcash_protocol::consensus::Network;
 #[command(about = "A utility to convert a Zcash mnemonic to Full Viewing Keys", long_about = None)]
 struct Cli {
     /// Specify the coin type for key derivation. Default is Mainnet. Available options: [mainnet,
-    /// testnet, regtest]
+    /// testnet]
     #[arg(long, env = "NETWORK", default_value = "mainnet", value_parser = parse_network)]
     network: Network,
 }

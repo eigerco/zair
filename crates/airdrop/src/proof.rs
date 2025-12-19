@@ -1,3 +1,17 @@
+//! Non-membership proof generation for airdrop claims.
+//!
+//! This module provides functionality to generate cryptographic proofs that a nullifier
+//! is NOT present in a snapshot of spent nullifiers. These proofs allow users to claim
+//! airdrops by demonstrating they held unspent shielded funds at a specific block height,
+//! without revealing their actual nullifiers.
+//!
+//! # How It Works
+//!
+//! The proof system uses a Merkle tree built from "range leaves" - each leaf represents
+//! a gap between two adjacent nullifiers where no other nullifiers exist. To prove
+//! non-membership, we find the gap containing the target nullifier and provide a
+//! Merkle proof for that leaf.
+
 use eyre::{ContextCompat as _, ensure};
 use non_membership_proofs::user_nullifiers::{AnyFoundNote, ViewingKeys};
 use non_membership_proofs::utils::ReverseBytes as _;
@@ -8,13 +22,21 @@ use serde_with::hex::Hex;
 use serde_with::serde_as;
 use tracing::{debug, info, instrument, warn};
 
+/// A non-membership proof demonstrating that a nullifier is not in the snapshot.
+///
+/// This proof contains the two adjacent nullifiers that bound the target nullifier
+/// (proving it falls in a "gap") along with a Merkle proof that this gap exists
+/// in the committed snapshot.
 #[serde_as]
 #[derive(Serialize)]
 pub struct NullifierProof {
+    /// The lower bound nullifier (the largest nullifier smaller than the target).
     #[serde_as(as = "Hex")]
     left_nullifier: Nullifier,
+    /// The upper bound nullifier (the smallest nullifier larger than the target).
     #[serde_as(as = "Hex")]
     right_nullifier: Nullifier,
+    /// The Merkle proof bytes proving the `(left, right)` range leaf exists in the tree.
     #[serde_as(as = "Hex")]
     merkle_proof: Vec<u8>,
 }
@@ -37,22 +59,43 @@ impl std::fmt::Debug for NullifierProof {
     }
 }
 
+/// Errors that can occur during non-membership proof generation.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 enum MerkleProofError {
+    /// The snapshot nullifiers slice is not sorted in ascending order.
     #[error("Snapshot nullifiers must be sorted")]
     NotSorted,
+    /// The Merkle tree was not built from the provided nullifiers.
+    /// The tree should have exactly `nullifiers.len() + 1` leaves.
     #[error(
         "Merkle tree leaves count ({0}) must equal nullifiers count + 1. Actual nullifiers count {1}"
     )]
     NullifiersNotMatchingTreeSize(usize, usize),
+    /// The generated Merkle proof failed verification against the tree root.
     #[error("Merkle proof verification failed")]
     InvalidProof,
+    /// The nullifier equals `[0x00; 32]` or `[0xFF; 32]`, which are reserved as virtual boundaries.
+    #[error("MAX and MIN nullifiers are reserved values and cannot be used as actual nullifiers")]
+    ReservedNullifierUsed,
 }
 
-/// Search for a nullifier in the snapshot and generate a non-membership proof if not found.
-/// Returns:
-/// - `Some(proof)` if the note is unspent
-/// - `None` if the note was already spent.
+/// Generates a non-membership proof for a found note.
+///
+/// Derives the nullifier from the note using the provided viewing keys, then generates
+/// a proof that this nullifier is not in the snapshot of spent nullifiers.
+///
+/// # Arguments
+///
+/// * `note` - The found note (Sapling or Orchard) to generate a proof for.
+/// * `snapshot_nullifiers` - Sorted slice of nullifiers from the snapshot.
+/// * `merkle_tree` - Merkle tree built from the snapshot nullifiers.
+/// * `keys` - Viewing keys used to derive the note's nullifier.
+///
+/// # Returns
+///
+/// * `Ok(Some(proof))` - The note is unspent (nullifier not in snapshot).
+/// * `Ok(None)` - The note was spent, or the nullifier could not be derived.
+/// * `Err(_)` - Proof generation failed.
 #[instrument(
     skip(snapshot_nullifiers, merkle_tree, keys, note),
     fields(pool = ?note.pool(), height = note.height())
@@ -86,6 +129,7 @@ pub fn generate_non_membership_proof<H: Hasher>(
 ///
 /// * `snapshot_nullifiers` must be non-empty and sorted in ascending order.
 /// * `merkle_tree` must have exactly `snapshot_nullifiers.len() + 1` leaves.
+/// * `nullifier` must not equal `[0x00; 32]` or `[0xFF; 32]` (reserved values).
 ///
 /// # Returns
 ///
@@ -138,6 +182,10 @@ fn generate_non_membership_proof_for_nullifier<H: Hasher>(
             snapshot_nullifiers.len()
         )
     );
+    ensure!(
+        MIN_NF != nullifier && nullifier != MAX_NF,
+        MerkleProofError::ReservedNullifierUsed
+    );
 
     let nullifier_hex = hex::encode::<Nullifier>(
         nullifier
@@ -186,7 +234,7 @@ fn generate_non_membership_proof_for_nullifier<H: Hasher>(
     );
 
     ensure!(
-        left_nf <= nullifier && nullifier <= right_nf,
+        left_nf < nullifier && nullifier < right_nf,
         "Bounding nullifiers do not properly bound nullifier {nullifier_hex}",
     );
 
@@ -216,6 +264,7 @@ fn generate_non_membership_proof_for_nullifier<H: Hasher>(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, reason = "Tests")]
+
     use non_membership_proofs::build_merkle_tree;
     use rs_merkle::algorithms::Sha256;
 
@@ -247,63 +296,24 @@ mod tests {
         let sorted = nfs![10, 50];
         let tree = build_merkle_tree::<Sha256>(&sorted).unwrap();
 
-        let result = generate_non_membership_proof_for_nullifier(MIN_NF, &sorted, &tree).unwrap();
+        let result = generate_non_membership_proof_for_nullifier(MIN_NF, &sorted, &tree);
         assert!(
-            result.is_some(),
-            "Expected Some(proof) for unspent note with MIN nullifier."
+            matches!(result, Err(e) if e.downcast_ref::<MerkleProofError>() == Some(&MerkleProofError::ReservedNullifierUsed))
         );
 
-        let result = generate_non_membership_proof_for_nullifier(MAX_NF, &sorted, &tree).unwrap();
+        let result = generate_non_membership_proof_for_nullifier(MAX_NF, &sorted, &tree);
         assert!(
-            result.is_some(),
-            "Expected Some(proof) for unspent note with MAX nullifier."
+            matches!(result, Err(e) if e.downcast_ref::<MerkleProofError>() == Some(&MerkleProofError::ReservedNullifierUsed))
         );
 
-        let mut sorted = nfs![10, 50];
-        sorted.insert(0, MIN_NF);
-        sorted.push(MAX_NF);
-        let tree = build_merkle_tree::<Sha256>(&sorted).unwrap();
+        let result = generate_non_membership_proof_for_nullifier(nf!(1), &sorted, &tree).unwrap();
+        assert!(result.is_some());
 
-        let result = generate_non_membership_proof_for_nullifier(MIN_NF, &sorted, &tree).unwrap();
-        assert!(
-            result.is_none(),
-            "Expected None. Nullifier was found in snapshot."
-        );
-        let result = generate_non_membership_proof_for_nullifier(MAX_NF, &sorted, &tree).unwrap();
-        assert!(
-            result.is_none(),
-            "Expected None. Nullifier was found in snapshot."
-        );
-
-        let mut sorted = nfs![10, 50];
-        sorted.insert(0, MIN_NF);
-        let tree = build_merkle_tree::<Sha256>(&sorted).unwrap();
-
-        let result = generate_non_membership_proof_for_nullifier(MIN_NF, &sorted, &tree).unwrap();
-        assert!(
-            result.is_none(),
-            "Expected None. Nullifier was found in snapshot."
-        );
-        let result = generate_non_membership_proof_for_nullifier(MAX_NF, &sorted, &tree).unwrap();
-        assert!(
-            result.is_some(),
-            "Expected Some(proof) for unspent note with MAX nullifier."
-        );
-
-        let mut sorted = nfs![10, 50];
-        sorted.push(MAX_NF);
-        let tree = build_merkle_tree::<Sha256>(&sorted).unwrap();
-
-        let result = generate_non_membership_proof_for_nullifier(MIN_NF, &sorted, &tree).unwrap();
-        assert!(
-            result.is_some(),
-            "Expected Some(proof) for unspent note with MIN nullifier."
-        );
-        let result = generate_non_membership_proof_for_nullifier(MAX_NF, &sorted, &tree).unwrap();
-        assert!(
-            result.is_none(),
-            "Expected None. Nullifier was found in snapshot."
-        );
+        let mut second_to_last = MAX_NF;
+        second_to_last[31] = 254;
+        let result =
+            generate_non_membership_proof_for_nullifier(second_to_last, &sorted, &tree).unwrap();
+        assert!(result.is_some());
     }
 
     #[test]
