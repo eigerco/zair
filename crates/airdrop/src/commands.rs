@@ -300,12 +300,10 @@ where
 }
 
 #[instrument]
-pub async fn airdrop_configuration_schema(show: bool) -> eyre::Result<()> {
-    if show {
+pub async fn airdrop_configuration_schema() -> eyre::Result<()> {
         let schema = airdrop_configuration::AirdropConfiguration::schema();
         let schema_str = serde_json::to_string_pretty(&schema)?;
         println!("Airdrop Configuration JSON Schema: {}", schema_str);
-    }
 
     Ok(())
 }

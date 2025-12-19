@@ -115,7 +115,7 @@ async fn main() -> eyre::Result<()> {
             )
             .await
         }
-        Commands::AirdropConfigurationSchema { show } => airdrop_configuration_schema(show).await,
+        Commands::AirdropConfigurationSchema => airdrop_configuration_schema().await,
     };
 
     if let Err(e) = res {
