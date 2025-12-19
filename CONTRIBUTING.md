@@ -182,11 +182,7 @@ current contents of the main branch is a preview of what the next full release
 of all crates may look like, but is not stable. For example, as-yet-unreleased
 changes may be altered incompatibly at any time.
 
-Individual crates have their own tags, e.g. `airdrop-0.1.0`. These tags point
-to the Git commit at which that crate version was published (which in general
-is not the merge commit for a release branch, but the actual commit that
-incremented the crate's version). Note however that other crates should not be
-considered stable at that revision.
+Each release is tagged in Git.
 
 #### Merge Workflow
 
