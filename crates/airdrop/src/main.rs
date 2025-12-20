@@ -127,3 +127,69 @@ async fn main() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod is_sanitize_tests {
+    use super::is_sanitize;
+
+    #[test]
+    fn empty_slice_is_sanitized() {
+        let v: Vec<u32> = vec![];
+        assert!(is_sanitize(&v));
+    }
+
+    #[test]
+    fn single_element_is_sanitized() {
+        let v = vec![42];
+        assert!(is_sanitize(&v));
+    }
+
+    #[test]
+    fn sorted_unique_is_sanitized() {
+        let v = vec![1, 2, 3, 4, 5];
+        assert!(is_sanitize(&v));
+    }
+
+    #[test]
+    fn unsorted_is_not_sanitized() {
+        let v = vec![3, 1, 2];
+        assert!(!is_sanitize(&v));
+    }
+
+    #[test]
+    fn duplicates_not_sanitized() {
+        let v = vec![1, 2, 2, 3];
+        assert!(!is_sanitize(&v));
+    }
+
+    #[test]
+    fn adjacent_duplicates_detected() {
+        let v = vec![1, 1];
+        assert!(!is_sanitize(&v));
+    }
+
+    #[test]
+    fn non_adjacent_duplicates_detected_if_sorted() {
+        // If duplicates exist, they become adjacent when sorted
+        let mut v = vec![1, 3, 1, 2];
+        v.sort();
+        // Now v = [1, 1, 2, 3] - duplicates are adjacent
+        assert!(!is_sanitize(&v));
+    }
+
+    #[test]
+    fn nullifier_style_arrays_work() {
+        // Test with nullifier-like 32-byte arrays
+        let nf1 = [0_u8; 32];
+        let mut nf2 = [0_u8; 32];
+        nf2[31] = 1;
+        let mut nf3 = [0_u8; 32];
+        nf3[31] = 2;
+
+        let sorted = vec![nf1, nf2, nf3];
+        assert!(is_sanitize(&sorted));
+
+        let with_dup = vec![nf1, nf1, nf2];
+        assert!(!is_sanitize(&with_dup));
+    }
+}

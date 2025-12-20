@@ -182,3 +182,170 @@ where
 
     Ok(nullifiers)
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, reason = "Tests")]
+
+    use rs_merkle::algorithms::Sha256;
+
+    use super::*;
+
+    /// Helper macro to create a nullifier with a specific last byte.
+    macro_rules! nf {
+        ($v:expr) => {{
+            let mut arr = [0_u8; 32];
+            arr[31] = $v;
+            arr
+        }};
+    }
+
+    /// Helper macro to create a sorted vector of nullifiers.
+    macro_rules! nfs {
+        ($($v:expr),* $(,)?) => {{
+            let mut v = vec![$( nf!($v) ),*];
+            v.sort();
+            v
+        }};
+    }
+
+    mod build_merkle_tree_tests {
+        use super::*;
+
+        #[test]
+        fn empty_nullifiers_returns_empty_tree() {
+            let nullifiers: Vec<Nullifier> = vec![];
+            let tree = build_merkle_tree::<Sha256>(&nullifiers).unwrap();
+            assert_eq!(tree.leaves_len(), 0);
+            assert!(tree.root().is_none());
+        }
+
+        #[test]
+        fn single_nullifier_creates_two_leaves() {
+            let nullifiers = nfs![50];
+            let tree = build_merkle_tree::<Sha256>(&nullifiers).unwrap();
+            // 1 nullifier => front leaf + back leaf = 2 leaves
+            assert_eq!(tree.leaves_len(), 2);
+            assert!(tree.root().is_some());
+        }
+
+        #[test]
+        fn multiple_nullifiers_creates_correct_leaf_count() {
+            let nullifiers = nfs![10, 20, 30, 40];
+            let tree = build_merkle_tree::<Sha256>(&nullifiers).unwrap();
+            // n nullifiers => n + 1 leaves (front + n-1 windows + back)
+            assert_eq!(tree.leaves_len(), 5);
+        }
+
+        #[test]
+        fn unsorted_nullifiers_returns_error() {
+            let unsorted = vec![nf!(50), nf!(10)]; // intentionally unsorted
+            let result = build_merkle_tree::<Sha256>(&unsorted);
+            assert!(matches!(result, Err(MerkleTreeError::NotSorted)));
+        }
+
+        #[test]
+        fn sorted_nullifiers_succeeds() {
+            let sorted = nfs![10, 20, 30];
+            let result = build_merkle_tree::<Sha256>(&sorted);
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn tree_is_deterministic() {
+            let nullifiers = nfs![10, 20, 30, 40, 50];
+            let tree1 = build_merkle_tree::<Sha256>(&nullifiers).unwrap();
+            let tree2 = build_merkle_tree::<Sha256>(&nullifiers).unwrap();
+            assert_eq!(tree1.root(), tree2.root());
+        }
+
+        #[test]
+        fn different_nullifiers_produce_different_roots() {
+            let nullifiers1 = nfs![10, 20, 30];
+            let nullifiers2 = nfs![10, 20, 31];
+            let tree1 = build_merkle_tree::<Sha256>(&nullifiers1).unwrap();
+            let tree2 = build_merkle_tree::<Sha256>(&nullifiers2).unwrap();
+            assert_ne!(tree1.root(), tree2.root());
+        }
+    }
+
+    mod build_leaf_tests {
+        use super::*;
+
+        #[test]
+        fn build_leaf_concatenates_nullifiers() {
+            let nf1 = nf!(10);
+            let nf2 = nf!(20);
+            let leaf = build_leaf(&nf1, &nf2);
+
+            assert_eq!(leaf.len(), 64);
+            assert_eq!(&leaf[..32], &nf1);
+            assert_eq!(&leaf[32..], &nf2);
+        }
+
+        #[test]
+        fn build_leaf_is_deterministic() {
+            let nf1 = nf!(10);
+            let nf2 = nf!(20);
+            let leaf1 = build_leaf(&nf1, &nf2);
+            let leaf2 = build_leaf(&nf1, &nf2);
+            assert_eq!(leaf1, leaf2);
+        }
+
+        #[test]
+        fn build_leaf_order_matters() {
+            let nf1 = nf!(10);
+            let nf2 = nf!(20);
+            let leaf1 = build_leaf(&nf1, &nf2);
+            let leaf2 = build_leaf(&nf2, &nf1);
+            assert_ne!(leaf1, leaf2);
+        }
+    }
+
+    mod file_io_tests {
+        use super::*;
+        use tempfile::tempdir;
+
+        #[tokio::test]
+        async fn write_and_read_nullifiers_roundtrip() {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("nullifiers.bin");
+
+            let nullifiers = nfs![10, 20, 30, 40, 50];
+            write_raw_nullifiers(&nullifiers, &path).await.unwrap();
+
+            let read_back = read_raw_nullifiers(&path).await.unwrap();
+            assert_eq!(nullifiers, read_back);
+        }
+
+        #[tokio::test]
+        async fn write_and_read_empty_nullifiers() {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("empty.bin");
+
+            let nullifiers: Vec<Nullifier> = vec![];
+            write_raw_nullifiers(&nullifiers, &path).await.unwrap();
+
+            let read_back = read_raw_nullifiers(&path).await.unwrap();
+            assert!(read_back.is_empty());
+        }
+
+        #[tokio::test]
+        async fn write_and_read_single_nullifier() {
+            let dir = tempdir().unwrap();
+            let path = dir.path().join("single.bin");
+
+            let nullifiers = vec![nf!(42)];
+            write_raw_nullifiers(&nullifiers, &path).await.unwrap();
+
+            let read_back = read_raw_nullifiers(&path).await.unwrap();
+            assert_eq!(nullifiers, read_back);
+        }
+
+        #[tokio::test]
+        async fn read_nonexistent_file_returns_error() {
+            let result = read_raw_nullifiers("/nonexistent/path/nullifiers.bin").await;
+            assert!(result.is_err());
+        }
+    }
+}
