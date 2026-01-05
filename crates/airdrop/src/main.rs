@@ -12,6 +12,8 @@ mod cli;
 mod commands;
 mod proof;
 
+pub(crate) const BUF_SIZE: usize = 1024 * 1024;
+
 /// Check if a slice is sorted and does not contains duplicates
 #[allow(
     clippy::indexing_slicing,
@@ -59,11 +61,6 @@ async fn main() -> eyre::Result<()> {
         .expect("Failed to install rustls crypto provider");
 
     // Load .env file (fails silently if not found)
-    #[allow(
-        clippy::let_underscore_must_use,
-        clippy::let_underscore_untyped,
-        reason = "Ignoring dotenv result intentionally"
-    )]
     let _ = dotenvy::dotenv();
 
     init_tracing();
@@ -117,7 +114,7 @@ async fn main() -> eyre::Result<()> {
             )
             .await
         }
-        Commands::AirdropConfigurationSchema => airdrop_configuration_schema().await,
+        Commands::AirdropConfigurationSchema => airdrop_configuration_schema(),
     };
 
     if let Err(e) = res {
@@ -126,4 +123,26 @@ async fn main() -> eyre::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use test_utils::nf;
+
+    use super::*;
+
+    #[test]
+    fn test_is_sanitize_nullifiers() {
+        let nf1 = nf!(0);
+        let nf2 = nf!(1);
+        let nf3 = nf!(2);
+
+        assert!(is_sanitize(&[nf1, nf2, nf3]));
+
+        // Nullifiers are unsorted
+        assert!(!is_sanitize(&[nf2, nf1, nf3]));
+
+        // Nullifiers contain duplicates
+        assert!(!is_sanitize(&[nf1, nf1, nf2]));
+    }
 }

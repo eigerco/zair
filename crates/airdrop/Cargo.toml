@@ -40,5 +40,9 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 zcash_keys = { workspace = true, features = ["orchard", "sapling"] }
 zcash_protocol = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+test-utils = { workspace = true }
+
 [lints]
 workspace = true

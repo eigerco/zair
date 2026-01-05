@@ -5,6 +5,7 @@
 //! These commands interact with lightwalletd, process nullifiers for Sapling and Orchard pools,
 //! and ensure data integrity for the airdrop process.
 
+use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::str::FromStr as _;
 
@@ -17,18 +18,20 @@ use non_membership_proofs::user_nullifiers::{
 };
 use non_membership_proofs::utils::ReverseBytes as _;
 use non_membership_proofs::{
-    Nullifier, Pool, build_merkle_tree, partition_by_pool, write_raw_nullifiers,
+    Nullifier, Pool, build_merkle_tree, partition_by_pool, write_nullifiers,
 };
 use rs_merkle::algorithms::Sha256;
 use rs_merkle::{Hasher, MerkleTree};
+use tokio::fs::File;
+use tokio::io::BufWriter;
 use tracing::{debug, info, instrument, warn};
 use zcash_protocol::consensus::{MainNetwork, Network, TestNetwork};
 
 use crate::airdrop_configuration::AirdropConfiguration;
 use crate::chain_nullifiers::{self, load_nullifiers_from_file};
 use crate::cli::CommonArgs;
-use crate::is_sanitize;
 use crate::proof::generate_non_membership_proof;
+use crate::{BUF_SIZE, is_sanitize};
 
 #[instrument(skip_all, fields(
     snapshot = %format!("{}..={}", config.snapshot.start(), config.snapshot.end())
@@ -94,7 +97,9 @@ where
         "Nullifier lists contain duplicates"
     );
 
-    write_raw_nullifiers(&nullifiers, &store).await?;
+    let file = File::create(&store).await?;
+    let mut writer = BufWriter::with_capacity(BUF_SIZE, file);
+    write_nullifiers(&nullifiers, &mut writer).await?;
     info!(file = ?store, pool, "Saved nullifiers");
 
     let merkle_tree =
@@ -160,8 +165,7 @@ pub async fn airdrop_claim(
             &airdrop_config,
             sapling_result.as_ref().map(|(_, tree)| tree),
             orchard_result.as_ref().map(|(_, tree)| tree),
-        )
-        .await?;
+        )?;
     }
 
     // Connect to lightwalletd
@@ -172,20 +176,23 @@ pub async fn airdrop_claim(
         orchard: Some(OrchardViewingKeys::from_fvk(orchard_fvk)),
     };
 
+    let scan_range = RangeInclusive::new(
+        (*config.snapshot.start()).max(birthday_height),
+        *config.snapshot.end(),
+    );
+
     // Scan for notes
     info!("Scanning for user notes");
     let mut stream = match config.network {
         Network::TestNetwork => Box::pin(lightwalletd.user_nullifiers::<TestNetwork>(
             &TestNetwork,
-            (*config.snapshot.start()).max(birthday_height),
-            *config.snapshot.end(),
+            scan_range,
             orchard_fvk,
             sapling_fvk,
         )),
         Network::MainNetwork => Box::pin(lightwalletd.user_nullifiers::<MainNetwork>(
             &MainNetwork,
-            (*config.snapshot.start()).max(birthday_height),
-            *config.snapshot.end(),
+            scan_range,
             orchard_fvk,
             sapling_fvk,
         )),
@@ -207,7 +214,7 @@ pub async fn airdrop_claim(
         info!(
             pool = ?found_note.pool(),
             height = found_note.height(),
-            nullifier = %hex::encode::<Nullifier>(nullifier.reverse_into_array().unwrap_or_default()),
+            nullifier = %hex::encode::<Nullifier>(nullifier.reverse_bytes().unwrap_or_default()),
             scope = ?found_note.scope(),
             "Found note"
         );
@@ -330,8 +337,7 @@ where
 }
 
 /// Verifies that the merkle roots from the snapshot nullifiers match the airdrop configuration.
-#[instrument(skip_all)]
-async fn verify_merkle_roots<H>(
+fn verify_merkle_roots<H>(
     airdrop_config: &AirdropConfiguration,
     sapling_tree: Option<&MerkleTree<H>>,
     orchard_tree: Option<&MerkleTree<H>>,
@@ -358,9 +364,9 @@ where
     Ok(())
 }
 
-#[instrument]
-pub async fn airdrop_configuration_schema() -> eyre::Result<()> {
-    let schema = AirdropConfiguration::schema();
+#[allow(clippy::print_stdout, reason = "Prints schema to stdout")]
+pub fn airdrop_configuration_schema() -> eyre::Result<()> {
+    let schema = schemars::schema_for!(AirdropConfiguration);
     let schema_str = serde_json::to_string_pretty(&schema)?;
     println!("Airdrop Configuration JSON Schema:\n{schema_str}");
 
