@@ -2,10 +2,13 @@
 
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::Parser;
 use eyre::{Result, ensure, eyre};
 use zcash_protocol::consensus::Network;
+
+use crate::commands::{HidingFactor, OrchardHidingFactor, SaplingHidingFactor};
 
 #[derive(Debug, Parser)]
 #[command(name = "airdrop")]
@@ -42,6 +45,9 @@ pub enum Commands {
             default_value = "orchard-snapshot-nullifiers.bin"
         )]
         orchard_snapshot_nullifiers: PathBuf,
+        /// Hiding factor arguments for nullifier derivation
+        #[command(flatten)]
+        hiding_factor: HidingFactorArgs,
     },
     /// Prepare the airdrop claim.
     ///
@@ -72,16 +78,26 @@ pub enum Commands {
         /// Export the valid airdrop claims to this JSON file
         #[arg(
             long,
-            env = "AIRDROP_CLAIMS_OUTPUT_FILE",
+            env = "AIRDROP_CLAIMS_FILE",
             default_value = "airdrop_claims.json"
         )]
         airdrop_claims_output_file: PathBuf,
         /// Airdrop configuration JSON file
-        #[arg(long, env = "AIRDROP_CONFIGURATION_FILE")]
-        airdrop_configuration_file: Option<PathBuf>,
+        #[arg(long, env = "airdrop_configuration.json")]
+        airdrop_configuration_file: PathBuf,
     },
     /// Prints the schema of the airdrop configuration JSON file
     AirdropConfigurationSchema,
+    /// Construct proofs for unspent notes
+    ConstructProofs {
+        /// User Proof inputs
+        #[arg(
+            long,
+            env = "AIRDROP_CLAIMS_FILE",
+            default_value = "airdrop_claims.json"
+        )]
+        airdrop_claims_input_file: PathBuf,
+    },
 }
 
 /// Common arguments for both commands
@@ -110,6 +126,41 @@ pub struct SourceArgs {
     #[cfg(feature = "file-source")]
     #[command(flatten)]
     pub input_files: Option<FileSourceArgs>,
+}
+
+/// Arguments for hiding nullifier derivation
+#[derive(Debug, Clone, clap::Args)]
+pub struct HidingFactorArgs {
+    /// Sapling personalization bytes for hiding nullifier
+    #[arg(
+        long,
+        env = "SAPLING_PERSONALIZATION",
+        default_value = "MASP_alt",
+        value_parser = parse_sapling_personalization
+    )]
+    sapling_personalization: Bytes,
+
+    /// Orchard domain separator for hiding nullifier
+    #[arg(long, env = "ORCHARD_HIDING_DOMAIN", default_value = "MASP:Airdrop")]
+    orchard_hiding_domain: String,
+
+    /// Orchard tag bytes for hiding nullifier
+    #[arg(long, env = "ORCHARD_HIDING_TAG", default_value = "K")]
+    orchard_hiding_tag: Bytes,
+}
+
+impl From<HidingFactorArgs> for HidingFactor {
+    fn from(args: HidingFactorArgs) -> Self {
+        Self {
+            sapling: SaplingHidingFactor {
+                personalization: args.sapling_personalization.0,
+            },
+            orchard: OrchardHidingFactor {
+                domain: args.orchard_hiding_domain,
+                tag: args.orchard_hiding_tag.0,
+            },
+        }
+    }
 }
 
 /// File-based nullifier source arguments (for development/testing).
@@ -192,6 +243,29 @@ fn parse_network(s: &str) -> Result<Network> {
     }
 }
 
+/// Newtype wrapper for byte arrays parsed from CLI strings.
+/// Clap interprets `Vec<u8>` as multiple u8 values, so we need this wrapper.
+#[derive(Debug, Clone)]
+struct Bytes(pub Vec<u8>);
+
+impl FromStr for Bytes {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(Self(s.as_bytes().to_vec()))
+    }
+}
+
+fn parse_sapling_personalization(s: &str) -> Result<Bytes> {
+    let bytes = Bytes(s.as_bytes().to_vec());
+    ensure!(
+        bytes.0.len() <= 8,
+        "Sapling personalization must be exactly 8 bytes"
+    );
+
+    Ok(bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,6 +287,11 @@ mod tests {
             matches!(result, Err(err) if err.to_string().contains("invalid digit found in string"))
         );
 
+        let result = parse_range("100..=abc");
+        assert!(
+            matches!(result, Err(err) if err.to_string().contains("invalid digit found in string"))
+        );
+
         let result = parse_range("200..=100");
         assert!(
             matches!(result, Err(err) if err.to_string().contains("Range start must be less than or equal to end"))
@@ -221,11 +300,11 @@ mod tests {
 
     #[test]
     fn network_parse() {
-        let network = parse_network("mainnet");
-        assert!(matches!(network, Ok(Network::MainNetwork)));
+        let network = parse_network("mainnet").expect("Failed to parse mainnet");
+        assert_eq!(network, Network::MainNetwork);
 
-        let network = parse_network("testnet");
-        assert!(matches!(network, Ok(Network::TestNetwork)));
+        let network = parse_network("testnet").expect("Failed to parse testnet");
+        assert_eq!(network, Network::TestNetwork);
     }
 
     #[test]
@@ -288,5 +367,27 @@ mod tests {
 
         let result: Result<Source, _> = args.try_into();
         assert!(matches!(result, Err(err) if err.to_string().contains("Cannot specify both")));
+    }
+
+    #[test]
+    fn str_to_bytes() {
+        let input = "MASP_alt";
+        let bytes: Bytes = input.parse().unwrap();
+        assert_eq!(bytes.0, b"MASP_alt".to_vec());
+    }
+
+    // HidingFactorArgs
+    #[test]
+    fn hiding_factor_args_to_hiding_factor() {
+        let args = HidingFactorArgs {
+            sapling_personalization: Bytes(b"MASP_alt".to_vec()),
+            orchard_hiding_domain: "MASP:Airdrop".to_string(),
+            orchard_hiding_tag: Bytes(b"K".to_vec()),
+        };
+
+        let hiding_factor: HidingFactor = args.into();
+        assert_eq!(hiding_factor.sapling.personalization, b"MASP_alt".to_vec());
+        assert_eq!(hiding_factor.orchard.domain, "MASP:Airdrop".to_string());
+        assert_eq!(hiding_factor.orchard.tag, b"K".to_vec());
     }
 }

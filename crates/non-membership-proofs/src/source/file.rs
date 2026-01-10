@@ -119,7 +119,10 @@ fn read_nullifiers<R: AsyncRead + Unpin>(
 
         loop {
             // Safety: leftover is always < NULLIFIER_SIZE (32), buf_size is always >= 32
-            let read_buf = buf.get_mut(leftover..).expect("leftover < NULLIFIER_SIZE < buf_size");
+            let read_buf = buf.get_mut(leftover..)
+                            .ok_or_else(|| io::Error::other(
+                                "leftover should always be < NULLIFIER_SIZE (32), buf_size is always >= 32"
+                            ))?;
             let n = reader.read(read_buf).await?;
             if n == 0 {
                 if leftover > 0 {
@@ -139,7 +142,10 @@ fn read_nullifiers<R: AsyncRead + Unpin>(
             let complete_bytes = complete_count.saturating_mul(NULLIFIER_SIZE);
 
             // Safety: complete_bytes <= total <= buf.len() by construction
-            let complete_slice = buf.get(..complete_bytes).expect("complete_bytes <= buf.len()");
+            let complete_slice = buf.get(..complete_bytes)
+                                    .ok_or_else(|| io::Error::other(
+                                        "complete_bytes <= buf.len()"
+                                    ))?;
             for chunk in complete_slice.chunks_exact(NULLIFIER_SIZE) {
                 // Safety: chunks_exact(32) guarantees exactly 32 bytes per chunk
                 let nullifier: Nullifier = chunk.try_into().expect("chunks_exact guarantees size");

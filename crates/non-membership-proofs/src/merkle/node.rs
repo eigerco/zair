@@ -2,7 +2,7 @@
 //!
 //! This module defines the node type used in non-membership Merkle trees,
 //! implementing the `Hashable` trait from `incrementalmerkletree` using
-//! Pedersen hash for ZK circuit compatibility.
+//! Pedersen hash to be ZK friendly.
 
 #![allow(clippy::indexing_slicing, reason = "Allow indexing for clarity")]
 
@@ -10,6 +10,8 @@ use std::sync::LazyLock;
 
 use incrementalmerkletree::{Hashable, Level};
 use sapling::merkle_hash;
+
+use crate::{NULLIFIER_SIZE, Nullifier};
 
 /// Level used for hashing nullifier pairs into leaves.
 ///
@@ -34,18 +36,18 @@ pub struct NonMembershipNode([u8; 32]);
 
 impl NonMembershipNode {
     /// The zero node (all zeros).
-    pub const ZERO: Self = Self([0u8; 32]);
+    pub const ZERO: Self = Self([0u8; NULLIFIER_SIZE]);
 
     /// Create a new node from a 32-byte array.
     #[cfg(test)]
     #[must_use]
-    pub const fn new(bytes: [u8; 32]) -> Self {
+    pub const fn new(bytes: Nullifier) -> Self {
         Self(bytes)
     }
 
     /// Get the underlying bytes.
     #[must_use]
-    pub const fn to_bytes(&self) -> [u8; 32] {
+    pub const fn to_bytes(&self) -> Nullifier {
         self.0
     }
 
@@ -57,24 +59,24 @@ impl NonMembershipNode {
     /// Using a level outside the tree depth (0-31) ensures domain separation
     /// from internal node hashes while keeping the hash ZK-circuit compatible.
     #[must_use]
-    pub fn leaf_from_nullifiers(left_nf: &[u8; 32], right_nf: &[u8; 32]) -> Self {
+    pub fn leaf_from_nullifiers(left_nf: &Nullifier, right_nf: &Nullifier) -> Self {
         Self(merkle_hash(usize::from(LEAF_HASH_LEVEL), left_nf, right_nf))
     }
 }
 
-impl AsRef<[u8; 32]> for NonMembershipNode {
-    fn as_ref(&self) -> &[u8; 32] {
+impl AsRef<Nullifier> for NonMembershipNode {
+    fn as_ref(&self) -> &Nullifier {
         &self.0
     }
 }
 
-impl From<[u8; 32]> for NonMembershipNode {
-    fn from(bytes: [u8; 32]) -> Self {
+impl From<Nullifier> for NonMembershipNode {
+    fn from(bytes: Nullifier) -> Self {
         Self(bytes)
     }
 }
 
-impl From<NonMembershipNode> for [u8; 32] {
+impl From<NonMembershipNode> for Nullifier {
     fn from(node: NonMembershipNode) -> Self {
         node.0
     }

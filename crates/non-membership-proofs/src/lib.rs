@@ -13,17 +13,15 @@ pub mod utils;
 use chain_nullifiers::PoolNullifier;
 use futures::{Stream, TryStreamExt as _};
 // Re-export key merkle types for convenience
-pub use merkle::{
-    MerklePathError, NON_MEMBERSHIP_TREE_DEPTH, NonMembershipNode, NonMembershipTree, TreePosition,
-};
-use serde::Serialize;
+pub use merkle::{MerklePathError, NonMembershipNode, NonMembershipTree, TreePosition};
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Buffer size for file I/O
 const BUF_SIZE: usize = 1024 * 1024;
 
 /// Size of a nullifier in bytes
-const NULLIFIER_SIZE: usize = 32;
+pub(crate) const NULLIFIER_SIZE: usize = 32;
 
 /// A representation of Nullifiers
 ///
@@ -37,7 +35,7 @@ pub const MIN_NF: Nullifier = [0_u8; NULLIFIER_SIZE];
 pub const MAX_NF: Nullifier = [0xFF_u8; NULLIFIER_SIZE];
 
 /// Zcash pools
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Pool {
     /// Sapling pool
     Sapling,
@@ -144,7 +142,7 @@ mod tests {
 
             assert_eq!(
                 data,
-                bytemuck::cast_slice(&nullifiers),
+                bytemuck::cast_slice::<_, u8>(&nullifiers),
                 "Buffer does not match expected nullifier bytes"
             );
         }
@@ -196,7 +194,7 @@ mod tests {
             // nullifiers is &[Nullifier] -> &[ [u8; 32] ]
             assert_eq!(buf.len(), nullifiers.len() * NULLIFIER_SIZE,);
 
-            assert_eq!(buf, bytemuck::cast_slice(&nullifiers),);
+            assert_eq!(buf, bytemuck::cast_slice::<_, u8>(&nullifiers),);
         }
     }
 

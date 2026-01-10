@@ -44,7 +44,7 @@ pub struct LightWalletdConfig {
 /// validation.
 #[derive(Debug, Clone)]
 pub struct ValidatedLightWalletdConfig {
-    pub inner: LightWalletdConfig,
+    inner: LightWalletdConfig,
 }
 
 impl std::ops::Deref for ValidatedLightWalletdConfig {

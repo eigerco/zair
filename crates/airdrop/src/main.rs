@@ -4,10 +4,11 @@ use clap::Parser as _;
 use non_membership_proofs::user_nullifiers::{OrchardViewingKeys, SaplingViewingKeys, ViewingKeys};
 use zcash_keys::keys::UnifiedFullViewingKey;
 
-use crate::cli::{Cli, Commands, CommonArgs};
-use crate::commands::{airdrop_claim, airdrop_configuration_schema, build_airdrop_configuration};
+use crate::cli::{Cli, Commands};
+use crate::commands::{
+    airdrop_claim, airdrop_configuration_schema, build_airdrop_configuration, construct_proofs,
+};
 
-mod airdrop_configuration;
 mod chain_nullifiers;
 mod cli;
 mod commands;
@@ -15,7 +16,7 @@ mod unspent_notes_proofs;
 
 pub(crate) const BUF_SIZE: usize = 1024 * 1024;
 
-fn init_tracing() {
+fn init_tracing() -> eyre::Result<()> {
     #[cfg(feature = "tokio-console")]
     {
         // tokio-console: layers the console subscriber with fmt
@@ -28,7 +29,8 @@ fn init_tracing() {
                         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
                 ),
             )
-            .init();
+            .try_init()
+            .map_err(|e| eyre::eyre!("Failed to initialize tracing: {:?}", e))?;
     }
 
     #[cfg(not(feature = "tokio-console"))]
@@ -40,8 +42,11 @@ fn init_tracing() {
             )
             .with_timer(tracing_subscriber::fmt::time::uptime())
             .with_target(false)
-            .init();
+            .try_init()
+            .map_err(|e| eyre::eyre!("Failed to initialize tracing: {:?}", e))?;
     }
+
+    Ok(())
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -49,12 +54,12 @@ async fn main() -> eyre::Result<()> {
     // Initialize rustls crypto provider (required for TLS connections)
     rustls::crypto::ring::default_provider()
         .install_default()
-        .expect("Failed to install rustls crypto provider");
+        .map_err(|e| eyre::eyre!("Failed to install rustls crypto provider: {e:?}"))?;
 
     // Load .env file (fails silently if not found)
     let _ = dotenvy::dotenv();
 
-    init_tracing();
+    init_tracing()?;
 
     let cli = Cli::parse();
 
@@ -64,12 +69,14 @@ async fn main() -> eyre::Result<()> {
             configuration_output_file,
             sapling_snapshot_nullifiers,
             orchard_snapshot_nullifiers,
+            hiding_factor,
         } => {
             build_airdrop_configuration(
                 config,
                 configuration_output_file,
                 sapling_snapshot_nullifiers,
                 orchard_snapshot_nullifiers,
+                hiding_factor.into(),
             )
             .await
         }
@@ -110,6 +117,9 @@ async fn main() -> eyre::Result<()> {
             .await
         }
         Commands::AirdropConfigurationSchema => airdrop_configuration_schema(),
+        Commands::ConstructProofs {
+            airdrop_claims_input_file,
+        } => construct_proofs(airdrop_claims_input_file).await,
     };
 
     if let Err(e) = res {

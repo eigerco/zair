@@ -7,6 +7,8 @@ use std::pin::Pin;
 
 use futures::Stream;
 use orchard::Note as OrchardNote;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use zcash_protocol::TxId;
 use zcash_protocol::consensus::Parameters;
 
@@ -70,14 +72,14 @@ pub trait NoteNullifier: Sized {
 }
 
 /// Sapling hiding factor
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq, Default)]
 pub struct SaplingHidingFactor<'a> {
     /// Personalization bytes, are used to derive the hiding sapling nullifier
     pub personalization: &'a [u8],
 }
 
 /// Orchard hiding factor
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq, Default)]
 pub struct OrchardHidingFactor<'a> {
     /// Domain separator for the hiding orchard nullifier
     pub domain: &'a str,
@@ -101,6 +103,7 @@ impl NoteNullifier for SaplingNote {
     type ViewingKeys = SaplingViewingKeys;
 
     fn nullifier(&self, keys: &Self::ViewingKeys) -> Nullifier {
+        self.note.cmu();
         let nk = keys.nk(self.scope);
         self.note.nf(nk, self.position).0
     }
@@ -224,6 +227,30 @@ impl AnyFoundNote {
         match self {
             Self::Sapling(_) => Pool::Sapling,
             Self::Orchard(_) => Pool::Orchard,
+        }
+    }
+
+    /// Returns the note commitment bytes.
+    #[must_use]
+    pub fn note_commitment(&self) -> [u8; 32] {
+        match self {
+            Self::Sapling(n) => n.note.note.cmu().to_bytes(),
+            Self::Orchard(n) => {
+                let extracted: orchard::note::ExtractedNoteCommitment = n.note.commitment().into();
+                extracted.to_bytes()
+            }
+        }
+    }
+
+    /// Returns the note position in the commitment tree.
+    ///
+    /// For Sapling notes, this is the position in the Sapling commitment tree.
+    /// For Orchard notes, this returns 0 as Orchard uses a different mechanism.
+    #[must_use]
+    pub const fn note_position(&self) -> Option<u64> {
+        match self {
+            Self::Sapling(n) => Some(n.note.position),
+            Self::Orchard(_) => None,
         }
     }
 }

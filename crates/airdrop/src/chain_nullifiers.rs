@@ -18,8 +18,8 @@ use tokio::fs::File;
 use tokio::io::BufReader;
 use tracing::{debug, instrument};
 
-use crate::cli::Source;
-use crate::{BUF_SIZE, CommonArgs};
+use crate::BUF_SIZE;
+use crate::cli::{CommonArgs, Source};
 
 /// Stream of nullifiers with unified error type
 type NullifierStream = Pin<Box<dyn Stream<Item = eyre::Result<PoolNullifier>> + Send>>;

@@ -15,7 +15,9 @@ http = { workspace = true }
 incrementalmerkletree = { workspace = true }
 orchard = { workspace = true }
 sapling = { workspace = true }
+schemars = { workspace = true, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true, features = ["hex"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [
   "rt-multi-thread",

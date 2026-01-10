@@ -167,11 +167,6 @@ impl NonMembershipTree {
 
     /// Build a non-membership Merkle tree from nullifiers (no positions marked).
     ///
-    /// This creates leaves representing the "gaps" between nullifiers:
-    /// - A front leaf: `(MIN, first_nullifier)`
-    /// - Interior leaves: `(nullifiers[i], nullifiers[i+1])` for each pair
-    /// - A back leaf: `(last_nullifier, MAX)`
-    ///
     /// For N nullifiers, this creates N+1 leaves.
     ///
     /// **Note**: This method does not mark any positions for witnessing.
@@ -385,7 +380,11 @@ fn gap_bounds(nullifiers: &[Nullifier], gap_idx: usize) -> Gap {
             left: nullifiers[i - 1],
             right: MAX_NF,
         },
-        i if i > len => panic!("gap_idx {gap_idx} out of bounds for {len} nullifiers"),
+        i if i > len => {
+            // Safety: Gap is used only internally in this file.
+            // Before its called we ensure gap_idx is in the expected range.
+            panic!("gap_idx {gap_idx} out of bounds for {len} nullifiers")
+        }
         i => Gap {
             left: nullifiers[i - 1],
             right: nullifiers[i],
@@ -395,10 +394,10 @@ fn gap_bounds(nullifiers: &[Nullifier], gap_idx: usize) -> Gap {
 
 /// Iterator that produces leaf nodes from a slice of nullifiers.
 ///
-/// Generates N+1 leaves for N nullifiers:
-/// - Front: `(MIN, nullifiers[0])`
-/// - Interior: `(nullifiers[i], nullifiers[i+1])` for `i` in 0..`n`-1
-/// - Back: `(nullifiers[n-1], MAX)`
+/// Generates N+1 leaves for N nullifiers gaps:
+/// - First gap: `(MIN, nullifiers[0])`
+/// - Last gap: `(nullifiers[n-1], MAX)`
+/// - Gaps in between First and Last: `(nullifiers[i], nullifiers[i+1])` for `i` in 0..`n`-i
 struct NullifierLeafIterator<'a> {
     nullifiers: &'a [Nullifier],
     index: usize,
@@ -423,7 +422,7 @@ impl Iterator for NullifierLeafIterator<'_> {
             return None;
         }
 
-        // Handle empty nullifiers: single gap from MIN to MAX
+        // If no nullifier is provided produce only a single gap from MIN to MAX
         let Gap { left, right } = if self.nullifiers.is_empty() {
             Gap {
                 left: MIN_NF,
@@ -794,7 +793,7 @@ mod tests {
             let (tree, _) = NonMembershipTree::from_chain_and_user_nullifiers(&chain, &user)
                 .expect("Tree creation failed");
 
-            // Position 1 works (marked)
+            // Position 1 passes (marked)
             assert!(tree.witness(Position::from(1u64)).is_ok());
 
             // Position 0 fails (not marked)

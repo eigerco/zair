@@ -7,16 +7,54 @@ use eyre::{ContextCompat as _, ensure};
 use futures::StreamExt as _;
 use http::Uri;
 use non_membership_proofs::source::light_walletd::LightWalletd;
-use non_membership_proofs::user_nullifiers::{AnyFoundNote, UserNullifiers as _, ViewingKeys};
+use non_membership_proofs::user_nullifiers::{
+    AnyFoundNote, NoteNullifier as _, UserNullifiers as _, ViewingKeys,
+};
 use non_membership_proofs::utils::{ReverseBytes as _, SanitiseNullifiers};
 use non_membership_proofs::{NonMembershipNode, NonMembershipTree, Nullifier, Pool, TreePosition};
 use tracing::{debug, info, instrument, warn};
 use zcash_protocol::consensus::{MainNetwork, Network, TestNetwork};
 
-use crate::airdrop_configuration::AirdropConfiguration;
 use crate::chain_nullifiers::load_nullifiers_from_file;
 use crate::cli::CommonArgs;
-use crate::unspent_notes_proofs::{NullifierProof, UnspentNotesProofs};
+use crate::commands::airdrop_configuration::AirdropConfiguration;
+use crate::unspent_notes_proofs::{
+    NullifierProof, OrchardPrivateInputs, PrivateInputs, PublicInputs, SaplingPrivateInputs,
+    UnspentNotesProofs,
+};
+
+/// Metadata collected from a found note needed for proof generation.
+#[derive(Debug, Clone, Copy)]
+enum NoteMetadata {
+    /// Sapling note metadata
+    Sapling(SaplingNoteMetadata),
+    /// Orchard note metadata
+    Orchard(OrchardNoteMetadata),
+}
+
+/// Metadata for a Sapling note.
+#[derive(Debug, Clone, Copy)]
+struct SaplingNoteMetadata {
+    /// The hiding nullifier (public input)
+    hiding_nullifier: Nullifier,
+    /// The note commitment
+    note_commitment: [u8; 32],
+    /// The note position in the commitment tree.
+    note_position: u64,
+    /// The block height where the note was created
+    block_height: u64,
+}
+
+/// Metadata for an Orchard note.
+#[derive(Debug, Clone, Copy)]
+struct OrchardNoteMetadata {
+    /// The hiding nullifier (public input)
+    hiding_nullifier: Nullifier,
+    /// The note commitment
+    note_commitment: [u8; 32],
+    /// The block height where the note was created
+    block_height: u64,
+}
 
 /// Parameters for processing a single pool's nullifiers.
 struct PoolParams {
@@ -25,6 +63,10 @@ struct PoolParams {
     user_nullifiers: SanitiseNullifiers,
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "Too many steps involved in airdrop claim generation"
+)]
 #[instrument(skip_all, fields(
     snapshot = %format!("{}..={}", config.snapshot.start(), config.snapshot.end()),
 ))]
@@ -35,7 +77,7 @@ pub async fn airdrop_claim(
     viewing_keys: ViewingKeys,
     birthday_height: u64,
     airdrop_claims_output_file: PathBuf,
-    airdrop_configuration_file: Option<PathBuf>,
+    airdrop_configuration_file: PathBuf,
 ) -> eyre::Result<()> {
     ensure!(
         birthday_height <= *config.snapshot.end(),
@@ -48,22 +90,81 @@ pub async fn airdrop_claim(
         "Airdrop claims can only be generated using lightwalletd as the source"
     );
 
-    if airdrop_configuration_file.is_none() {
-        warn!("Airdrop configuration file is not provided. Merkle roots will not be verified");
-    }
-
     let found_notes = find_user_notes(config, &viewing_keys, birthday_height).await?;
 
-    // Partition found notes by pool
+    // Partition found notes by pool and collect note metadata
     let mut user_nullifiers_by_pool: HashMap<Pool, Vec<Nullifier>> = HashMap::new();
+    let mut note_metadata_map: HashMap<Nullifier, NoteMetadata> = HashMap::new();
+
+    let airdrop_config: AirdropConfiguration =
+        serde_json::from_str(&tokio::fs::read_to_string(airdrop_configuration_file).await?)?;
+
+    let orchard_hiding_factor: non_membership_proofs::user_nullifiers::OrchardHidingFactor =
+        (&airdrop_config.hiding_factor.orchard).into();
+    let sapling_hiding_factor: non_membership_proofs::user_nullifiers::SaplingHidingFactor =
+        (&airdrop_config.hiding_factor.sapling).into();
+
     for note in &found_notes {
-        if let Some(nullifier) = note.nullifier(&viewing_keys) {
-            user_nullifiers_by_pool
-                .entry(note.pool())
-                .or_default()
-                .push(nullifier);
-        } else {
-            debug!(height = note.height(), "Skipping note: no viewing key");
+        match note {
+            AnyFoundNote::Sapling(found_note) => {
+                if let Some(sapling_key) = viewing_keys.sapling.as_ref() {
+                    let nullifier = found_note.nullifier(sapling_key);
+                    let hiding_nullifier =
+                        found_note.hiding_nullifier(sapling_key, &sapling_hiding_factor)?;
+
+                    let Some(note_position) = note.note_position() else {
+                        warn!(
+                            height = found_note.height(),
+                            "Sapling note missing position, skipping note"
+                        );
+                        continue;
+                    };
+
+                    note_metadata_map.insert(
+                        nullifier,
+                        NoteMetadata::Sapling(SaplingNoteMetadata {
+                            hiding_nullifier,
+                            note_commitment: note.note_commitment(),
+                            note_position,
+                            block_height: note.height(),
+                        }),
+                    );
+                    user_nullifiers_by_pool
+                        .entry(Pool::Sapling)
+                        .or_default()
+                        .push(nullifier);
+                } else {
+                    warn!(
+                        height = found_note.height(),
+                        "Sapling key not provided, skipping note"
+                    );
+                }
+            }
+            AnyFoundNote::Orchard(found_note) => {
+                if let Some(orchard_key) = viewing_keys.orchard.as_ref() {
+                    let nullifier = found_note.nullifier(orchard_key);
+                    let hiding_nullifier =
+                        found_note.hiding_nullifier(orchard_key, &orchard_hiding_factor)?;
+
+                    note_metadata_map.insert(
+                        nullifier,
+                        NoteMetadata::Orchard(OrchardNoteMetadata {
+                            hiding_nullifier,
+                            note_commitment: note.note_commitment(),
+                            block_height: note.height(),
+                        }),
+                    );
+                    user_nullifiers_by_pool
+                        .entry(Pool::Orchard)
+                        .or_default()
+                        .push(nullifier);
+                } else {
+                    warn!(
+                        height = found_note.height(),
+                        "Orchard key not provided, skipping note"
+                    );
+                }
+            }
         }
     }
 
@@ -103,25 +204,29 @@ pub async fn airdrop_claim(
     }
 
     // Verify merkle roots if configuration file is provided
-    if let Some(ref file) = airdrop_configuration_file {
-        let airdrop_config: AirdropConfiguration =
-            serde_json::from_str(&tokio::fs::read_to_string(file).await?)?;
-
-        verify_merkle_roots(&airdrop_config, &pool_data)?;
-    }
+    verify_merkle_roots(&airdrop_config, &pool_data)?;
 
     // Generate proofs
     info!("Generating non-membership proofs");
 
+    // Extract merkle roots before consuming pool_data
+    let sapling_merkle_root = pool_data
+        .get(&Pool::Sapling)
+        .map_or([0u8; 32], |data| data.tree.root().to_bytes());
+    let orchard_merkle_root = pool_data
+        .get(&Pool::Orchard)
+        .map_or([0u8; 32], |data| data.tree.root().to_bytes());
+
     let mut proofs_by_pool: HashMap<Pool, Vec<NullifierProof>> = HashMap::new();
     for (pool, data) in pool_data {
-        let proofs = generate_user_proofs(&data.tree, data.user_nullifiers);
+        let proofs = generate_user_proofs(&data.tree, data.user_nullifiers, &note_metadata_map);
         proofs_by_pool.insert(pool, proofs);
     }
 
     let total_user_proofs: usize = proofs_by_pool.values().map(Vec::len).sum();
 
-    let user_proofs = UnspentNotesProofs::new(proofs_by_pool);
+    let user_proofs =
+        UnspentNotesProofs::new(sapling_merkle_root, orchard_merkle_root, proofs_by_pool);
 
     let json = serde_json::to_string_pretty(&user_proofs)?;
     tokio::fs::write(&airdrop_claims_output_file, json).await?;
@@ -244,9 +349,6 @@ async fn build_pool_merkle_tree(params: PoolParams) -> eyre::Result<Option<Loade
     Ok(Some(loaded_data))
 }
 
-/// Verifies that the merkle roots from the snapshot nullifiers match the airdrop configuration.
-///
-/// This re-builds the tree from nullifiers to verify the root matches.
 fn verify_merkle_roots(
     airdrop_config: &AirdropConfiguration,
     pool_data: &HashMap<Pool, LoadedPoolData>,
@@ -279,10 +381,21 @@ fn verify_merkle_roots(
 fn generate_user_proofs(
     tree: &NonMembershipTree,
     user_nullifiers: Vec<TreePosition>,
+    note_metadata_map: &HashMap<Nullifier, NoteMetadata>,
 ) -> Vec<NullifierProof> {
     user_nullifiers
         .into_iter()
         .filter_map(|tree_position| {
+            let metadata = note_metadata_map.get(&tree_position.nullifier).copied();
+
+            let Some(metadata) = metadata else {
+                warn!(
+                    nullifier = %hex::encode::<Nullifier>(tree_position.nullifier.reverse_bytes().unwrap_or_default()),
+                    "Missing note metadata for user nullifier"
+                );
+                return None;
+            };
+
             tree.witness(tree_position.leaf_position)
                 .ok()
                 .map_or_else(|| {
@@ -293,16 +406,48 @@ fn generate_user_proofs(
                     );
 
                     None
-                }, |witness| Some(NullifierProof {
-                        left_nullifier: tree_position.left_bound,
-                        right_nullifier: tree_position.right_bound,
-                        position: tree_position.leaf_position.into(),
-                        merkle_proof: witness
-                            .iter()
-                            .flat_map(NonMembershipNode::to_bytes)
-                            .collect(),
+                }, |witness| {
+                    let merkle_proof: Vec<u8> = witness
+                        .iter()
+                        .flat_map(NonMembershipNode::to_bytes)
+                        .collect();
+
+                    let (hiding_nullifier, block_height, private_inputs) = match metadata {
+                        NoteMetadata::Sapling(meta) => (
+                            meta.hiding_nullifier,
+                            meta.block_height,
+                            PrivateInputs::Sapling(SaplingPrivateInputs {
+                                nullifier: tree_position.nullifier,
+                                note_commitment: meta.note_commitment,
+                                note_position: meta.note_position,
+                                left_nullifier: tree_position.left_bound,
+                                right_nullifier: tree_position.right_bound,
+                                leaf_position: tree_position.leaf_position.into(),
+                                merkle_proof,
+                            }),
+                        ),
+                        NoteMetadata::Orchard(meta) => (
+                            meta.hiding_nullifier,
+                            meta.block_height,
+                            PrivateInputs::Orchard(OrchardPrivateInputs {
+                                nullifier: tree_position.nullifier,
+                                note_commitment: meta.note_commitment,
+                                left_nullifier: tree_position.left_bound,
+                                right_nullifier: tree_position.right_bound,
+                                leaf_position: tree_position.leaf_position.into(),
+                                merkle_proof,
+                            }),
+                        ),
+                    };
+
+                    Some(NullifierProof {
+                        block_height,
+                        public_inputs: PublicInputs {
+                            hiding_nullifier,
+                        },
+                        private_inputs,
                     })
-                )
+                })
         })
         .collect()
 }

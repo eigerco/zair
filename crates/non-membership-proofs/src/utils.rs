@@ -2,7 +2,35 @@
 
 use std::ops::Deref;
 
+use serde_with::hex::Hex;
+
 use crate::Nullifier;
+
+/// A `serde_as` adapter that reverses byte order before hex encoding.
+///
+/// This is useful for displaying Zcash values (nullifiers, hashes, etc.)
+pub struct ReversedHex;
+
+impl<const N: usize> serde_with::SerializeAs<[u8; N]> for ReversedHex {
+    fn serialize_as<S>(value: &[u8; N], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let reversed = reverse_bytes(value);
+        <Hex as serde_with::SerializeAs<[u8; N]>>::serialize_as(&reversed, serializer)
+    }
+}
+
+impl<'de, const N: usize> serde_with::DeserializeAs<'de, [u8; N]> for ReversedHex {
+    fn deserialize_as<D>(deserializer: D) -> Result<[u8; N], D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes: [u8; N] =
+            <Hex as serde_with::DeserializeAs<'de, [u8; N]>>::deserialize_as(deserializer)?;
+        Ok(reverse_bytes(&bytes))
+    }
+}
 
 #[allow(
     clippy::indexing_slicing,
@@ -71,7 +99,7 @@ impl Deref for SanitiseNullifiers {
 
 #[cfg(test)]
 mod tests {
-    use test_utils::nfs;
+    use test_utils::{nf, nfs};
 
     use super::*;
     use crate::utils::SanitiseNullifiers;
@@ -93,7 +121,14 @@ mod tests {
 
     #[test]
     fn test_sanitise_nullifiers() {
-        let nullifiers = nfs![3_u8, 2_u8, 1_u8, 2_u8, 3_u8, 1_u8];
+        let nullifiers = vec![
+            nf![3_u8],
+            nf![2_u8],
+            nf![1_u8],
+            nf![2_u8],
+            nf![3_u8],
+            nf![1_u8],
+        ];
 
         let sanitised = SanitiseNullifiers::new(nullifiers);
 

@@ -56,6 +56,8 @@ The workspace also uses `pre-commit` checks. These can be removed if they prove 
 - **Description**: CLI tool for building Zcash airdrop snapshots and generating non-membership proofs. It supports two main commands:
   - `build-airdrop-configuration`: Fetches nullifiers from a lightwalletd server or local files and saves them as snapshot files. Also exports a configuration JSON with Merkle tree roots.
   - `airdrop-claim`: Scans the chain for notes belonging to provided viewing keys, builds Merkle trees from snapshot nullifiers, and generates non-membership proofs for unspent notes.
+  - `airdrop-configuration-schema`: Prints the schema of the airdrop configuration JSON file
+  - `construct-proofs`: For the moment this is a placeholder, for the subcommand that will generate the ZK proof.
   - Run with `--help` to check the usage.
 
 ### mnemonic-to-fvks
@@ -69,6 +71,11 @@ The workspace also uses `pre-commit` checks. These can be removed if they prove 
   - Scanning the chain for user notes using Full Viewing Keys
   - Building Merkle trees from sorted nullifiers for non-membership proofs
   - Deriving standard and hiding nullifiers for Sapling and Orchard notes
+
+### test-utils
+
+- **Description**: Used to share test utils between `airdrop` and `non-membership-proofs` crates.
+  - This test utils are used to generate nullifiers and sorted list of nullifiers that are used in unit-tests.
 
 ## Usage
 
