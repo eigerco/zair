@@ -188,30 +188,33 @@ async fn build_pool_merkle_tree(
 /// producing claim inputs with the appropriate pool-specific private inputs.
 fn generate_proofs<M: NoteMetadata>(
     tree: &NonMembershipTree,
-    user_nullifiers: Vec<TreePosition>,
+    user_nullifiers: &[TreePosition],
     note_metadata_map: &HashMap<Nullifier, M>,
 ) -> Vec<ClaimInput<M::PoolPrivateInputs>> {
     user_nullifiers
-        .into_iter()
+        .iter()
         .filter_map(|tree_position| {
-            // Find metadata by matching hiding_nullifier
-            let metadata = note_metadata_map
-                .values()
-                .find(|meta| meta.hiding_nullifier() == tree_position.nullifier)?;
+            let metadata = note_metadata_map.get(&tree_position.nullifier)?;
 
-            let witness = tree.witness(tree_position.leaf_position).ok()?;
-
-            let nf_merkle_proof: Vec<[u8; 32]> = witness
+            let nf_merkle_proof: Vec<[u8; 32]> = tree
+                .witness(tree_position.leaf_position)
+                .ok()?
                 .iter()
                 .map(non_membership_proofs::NonMembershipNode::to_bytes)
                 .collect();
+
+            debug!(
+                "Generated proof for nullifier {:x?} at block height {}",
+                tree_position.nullifier,
+                metadata.block_height()
+            );
 
             Some(ClaimInput {
                 block_height: metadata.block_height(),
                 public_inputs: PublicInputs {
                     hiding_nullifier: metadata.hiding_nullifier(),
                 },
-                private_inputs: metadata.to_private_inputs(&tree_position, nf_merkle_proof),
+                private_inputs: metadata.to_private_inputs(tree_position, nf_merkle_proof),
             })
         })
         .collect()
@@ -238,8 +241,7 @@ async fn process_pool_claims<P: PoolProcessor>(
     };
 
     // Build merkle tree
-    let user_nullifiers =
-        SanitiseNullifiers::new(notes.values().map(NoteMetadata::hiding_nullifier).collect());
+    let user_nullifiers = SanitiseNullifiers::new(notes.keys().copied().collect());
     let pool_data = build_pool_merkle_tree(&snapshot_nullifiers, user_nullifiers).await?;
 
     // Verify merkle root
@@ -251,7 +253,7 @@ async fn process_pool_claims<P: PoolProcessor>(
     );
 
     info!("Generating non-membership proofs");
-    let claims = generate_proofs(&pool_data.tree, pool_data.user_nullifiers, &notes);
+    let claims = generate_proofs(&pool_data.tree, &pool_data.user_nullifiers, &notes);
 
     Ok(PoolClaimResult { anchor, claims })
 }
