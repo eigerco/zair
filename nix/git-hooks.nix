@@ -1,16 +1,14 @@
 { inputs, ... }:
-
 {
   imports = [ inputs.git-hooks-nix.flakeModule ];
 
   perSystem =
-    { system, ... }:
+    {
+      system,
+      pkgs,
+      ...
+    }:
     let
-      pkgs = import inputs.nixpkgs {
-        inherit system;
-        overlays = [ (import inputs.rust-overlay) ];
-      };
-
       rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ../rust-toolchain.toml;
     in
     {
