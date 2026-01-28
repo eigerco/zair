@@ -3,7 +3,6 @@
   perSystem =
     {
       config,
-      system,
       pkgs,
       ...
     }:

@@ -3,11 +3,7 @@
   imports = [ inputs.git-hooks-nix.flakeModule ];
 
   perSystem =
-    {
-      system,
-      pkgs,
-      ...
-    }:
+    { pkgs, ... }:
     let
       rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ../rust-toolchain.toml;
     in
