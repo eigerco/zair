@@ -27,7 +27,7 @@
             shellcheck.enable = true;
 
             # nix
-            nixfmt-rfc-style.enable = true;
+            nixfmt.enable = true;
             flake-checker.enable = true;
             statix = {
               enable = true;
