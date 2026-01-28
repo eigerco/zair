@@ -1,14 +1,12 @@
 { inputs, ... }:
 {
   perSystem =
-    { config, system, ... }:
+    {
+      config,
+      pkgs,
+      ...
+    }:
     let
-      # Apply rust overlay to nixpkgs
-      pkgs = import inputs.nixpkgs {
-        inherit system;
-        overlays = [ (import inputs.rust-overlay) ];
-      };
-
       # Patch orchard
       patchedOrchard = pkgs.runCommand "orchard-patched" { } ''
         cp -r ${inputs.orchard} $out
