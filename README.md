@@ -22,8 +22,6 @@ These proofs are constructed using Merkle trees built from the set of known null
 After cloning the repo:
 
 ```bash
-git submodule update --init --recursive
-
 git clone --branch v0.11.0 --single-branch https://github.com/zcash/orchard.git .patched-orchard
 git -C .patched-orchard apply "../nix/airdrop-orchard-nullifier.patch"
 
@@ -34,12 +32,6 @@ git -C .patched-sapling-crypto apply "../nix/airdrop-sapling-nullifier.patch"
 > **Note**: The patches add support for deriving "hiding nullifiers" - a privacy-preserving nullifier derivation that allows proving non-membership without revealing the actual nullifier.
 
 ### With nix
-
-Submodule updates need to be run manually:
-
-```bash
-git submodule update --init --recursive
-```
 
 This workspace uses Nix to enhance the development experience.
 
@@ -53,9 +45,12 @@ The workspace also uses `pre-commit` checks. These can be removed if they prove 
 
 ### airdrop
 
-- **Description**: CLI tool for building Zcash airdrop snapshots and generating non-membership proofs. It supports two main commands:
-  - `build-airdrop-configuration`: Fetches nullifiers from a lightwalletd server or local files and saves them as snapshot files. Also exports a configuration JSON with Merkle tree roots.
-  - `airdrop-claim`: Scans the chain for notes belonging to provided viewing keys, builds Merkle trees from snapshot nullifiers, and generates non-membership proofs for unspent notes.
+- **Description**: CLI tool for building Zcash airdrop snapshots and generating claim proofs. It supports the following commands:
+  - `build-airdrop-configuration`: Fetches nullifiers from a lightwalletd server and saves them as snapshot files. Also exports a configuration JSON with Merkle tree roots.
+  - `airdrop-claim`: Scans the chain for notes belonging to provided viewing keys, builds Merkle trees from snapshot nullifiers, and generates claim inputs for unspent notes.
+  - `generate-claim-proofs`: Generates Groth16 ZK proofs from claim inputs (runs in parallel).
+  - `generate-claim-params`: Generates the Groth16 proving and verifying keys (organizers only).
+  - `verify-claim-proof`: Verifies generated claim proofs against the verifying key.
   - Run with `--help` to check the usage.
 
 ### mnemonic-to-fvks
@@ -69,6 +64,13 @@ The workspace also uses `pre-commit` checks. These can be removed if they prove 
   - Scanning the chain for user notes using Full Viewing Keys
   - Building Merkle trees from sorted nullifiers for non-membership proofs
   - Deriving standard and hiding nullifiers for Sapling and Orchard notes
+
+### claim-circuit
+
+- **Description**: Custom Groth16 ZK circuit for airdrop claims. Proves ownership of unspent Sapling notes without revealing the actual nullifier. The circuit verifies:
+  - Note commitment inclusion in the Zcash commitment tree
+  - The note was not spent at the snapshot height
+  - Correct derivation of the hiding nullifier
 
 ## Usage
 
