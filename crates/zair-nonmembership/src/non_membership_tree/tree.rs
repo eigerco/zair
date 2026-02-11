@@ -502,7 +502,7 @@ mod tests {
             assert_eq!(tree.leaf_count(), 1);
             assert_eq!(
                 tree.root().to_bytes(),
-                hex!("b15207abcadbb878d914da5d27998cdc0052036053eb6b51786689665ee3d651")
+                hex!("c1fe1db7b01153fa3e40fd0053f3f7f69385c2de7fff5c4d705407fb32acb052")
             );
         }
 

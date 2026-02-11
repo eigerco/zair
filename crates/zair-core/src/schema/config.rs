@@ -8,8 +8,6 @@ use crate::base::ReversedHex;
 /// Configuration for an airdrop snapshot.
 #[derive(Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 pub struct AirdropConfiguration {
-    /// Schema version.
-    pub version: u32,
     /// Zcash network this snapshot belongs to.
     pub network: AirdropNetwork,
     /// Snapshot block height (inclusive).
@@ -20,6 +18,17 @@ pub struct AirdropConfiguration {
     /// Orchard snapshot configuration. Present when Orchard pool is enabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub orchard: Option<OrchardSnapshot>,
+}
+
+/// Value commitment scheme selection.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ValueCommitmentScheme {
+    /// Native pool commitment (`cv`).
+    #[default]
+    Native,
+    /// SHA-256 commitment (`cv_sha256`).
+    Sha256,
 }
 
 /// Network identifier for an airdrop snapshot.
@@ -44,8 +53,11 @@ pub struct SaplingSnapshot {
     #[serde_as(as = "Hex")]
     #[schemars(with = "String")]
     pub nullifier_gap_root: [u8; 32],
-    /// Domain-separation identifier used for Sapling airdrop nullifiers.
+    /// Domain-separation identifier used for Sapling hiding nullifiers.
     pub target_id: String,
+    /// Value commitment scheme used by Sapling proofs.
+    #[serde(default)]
+    pub value_commitment_scheme: ValueCommitmentScheme,
 }
 
 /// Orchard-specific snapshot data.
@@ -60,14 +72,14 @@ pub struct OrchardSnapshot {
     #[serde_as(as = "Hex")]
     #[schemars(with = "String")]
     pub nullifier_gap_root: [u8; 32],
-    /// Domain-separation identifier used for Orchard airdrop nullifiers.
+    /// Domain-separation identifier used for Orchard hiding nullifiers.
     pub target_id: String,
+    /// Value commitment scheme used by Orchard proofs.
+    #[serde(default)]
+    pub value_commitment_scheme: ValueCommitmentScheme,
 }
 
 impl AirdropConfiguration {
-    /// Current schema version.
-    pub const VERSION: u32 = 1;
-
     /// Create a new airdrop configuration.
     #[must_use]
     pub const fn new(
@@ -77,7 +89,6 @@ impl AirdropConfiguration {
         orchard: Option<OrchardSnapshot>,
     ) -> Self {
         Self {
-            version: Self::VERSION,
             network,
             snapshot_height,
             sapling,
@@ -116,29 +127,29 @@ impl AirdropConfiguration {
     }
 }
 
-/// Commitment tree roots for Sapling and Orchard pools.
+/// Commitment tree anchors for Sapling and Orchard pools.
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq, Clone)]
 pub struct CommitmentTreeAnchors {
-    /// Sapling note commitment tree root.
+    /// Sapling commitment tree anchor.
     #[serde_as(as = "ReversedHex")]
     #[schemars(with = "String")]
     pub sapling: [u8; 32],
-    /// Orchard note commitment tree root.
+    /// Orchard commitment tree anchor.
     #[serde_as(as = "Hex")]
     #[schemars(with = "String")]
     pub orchard: [u8; 32],
 }
 
-/// Non-membership roots for Sapling and Orchard nullifier trees.
+/// Non-membership tree roots for Sapling and Orchard nullifiers.
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq, Clone)]
 pub struct NonMembershipTreeAnchors {
-    /// Sapling nullifier non-membership root.
+    /// Sapling non-membership tree root.
     #[serde_as(as = "Hex")]
     #[schemars(with = "String")]
     pub sapling: [u8; 32],
-    /// Orchard nullifier non-membership root.
+    /// Orchard non-membership tree root.
     #[serde_as(as = "Hex")]
     #[schemars(with = "String")]
     pub orchard: [u8; 32],

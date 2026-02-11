@@ -15,10 +15,12 @@ use rand::RngCore;
 pub use sapling::MerklePath;
 use sapling::value::{NoteValue, ValueCommitTrapdoor};
 use sapling::{Diversifier, Note, ProofGenerationKey, Rseed};
-use zair_sapling_circuit::circuit::{Claim, ValueCommitmentOpening};
+use zair_sapling_circuit::circuit::{
+    Claim, ValueCommitmentOpening, ValueCommitmentScheme as CircuitValueCommitmentScheme,
+};
 
 use crate::error::ClaimProofError;
-use crate::types::{GROTH_PROOF_SIZE, GrothProofBytes};
+use crate::types::{GROTH_PROOF_SIZE, GrothProofBytes, ValueCommitmentScheme};
 
 /// Parameters for the Claim circuit.
 pub struct ClaimParameters(pub Parameters<Bls12>);
@@ -73,6 +75,8 @@ pub fn prepare_circuit(
     nm_right_nf: [u8; 32],
     nm_merkle_path: Vec<([u8; 32], bool)>,
     nm_anchor: bls12_381::Scalar,
+    value_commitment_scheme: ValueCommitmentScheme,
+    rcv_sha256: Option<[u8; 32]>,
 ) -> Result<Claim, ClaimProofError> {
     // Construct the value commitment opening
     let value_commitment_opening = ValueCommitmentOpening {
@@ -125,6 +129,11 @@ pub fn prepare_circuit(
         nm_right_nf: Some(nm_right_nf),
         nm_merkle_path,
         nm_anchor: Some(nm_anchor),
+        value_commitment_scheme: match value_commitment_scheme {
+            ValueCommitmentScheme::Native => CircuitValueCommitmentScheme::Native,
+            ValueCommitmentScheme::Sha256 => CircuitValueCommitmentScheme::Sha256,
+        },
+        rcv_sha256,
     })
 }
 

@@ -8,7 +8,9 @@ use tokio::fs::File;
 use tokio::io::BufWriter;
 use tracing::{info, instrument, warn};
 use zair_core::base::SanitiseNullifiers;
-use zair_core::schema::config::{AirdropConfiguration, OrchardSnapshot, SaplingSnapshot};
+use zair_core::schema::config::{
+    AirdropConfiguration, OrchardSnapshot, SaplingSnapshot, ValueCommitmentScheme,
+};
 use zair_nonmembership::NonMembershipTree;
 use zair_scan::light_walletd::LightWalletd;
 use zair_scan::scanner::ChainNullifiersVisitor;
@@ -16,18 +18,12 @@ use zair_scan::write_nullifiers;
 use zcash_protocol::consensus::BlockHeight;
 
 use crate::common::{CommonConfig, PoolSelection, resolve_lightwalletd_url, to_airdrop_network};
+use crate::network_params::{
+    orchard_activation_height, sapling_activation_height, scan_start_height,
+};
 
 /// 1 MiB buffer for file I/O.
 const FILE_BUF_SIZE: usize = 1024 * 1024;
-
-/// Sapling activation height on mainnet, see <https://zips.z.cash/zip-0205>.
-const SAPLING_MAINNET_START: u64 = 419_200;
-/// Sapling activation height on testnet, see <https://zips.z.cash/zip-0205>.
-const SAPLING_TESTNET_START: u64 = 280_000;
-/// Orchard activation height on mainnet, see <https://zips.z.cash/zip-0252>.
-const ORCHARD_MAINNET_START: u64 = 1_687_104;
-/// Orchard activation height on testnet, see <https://zips.z.cash/zip-0252>.
-const ORCHARD_TESTNET_START: u64 = 1_842_420;
 
 /// Build the airdrop configuration by fetching nullifiers from lightwalletd,
 /// computing the non-membership roots, and exporting snapshot metadata.
@@ -35,6 +31,10 @@ const ORCHARD_TESTNET_START: u64 = 1_842_420;
 /// # Errors
 /// Returns an error if fetching nullifiers, validating inputs, or writing files fails.
 #[instrument(skip_all, fields(snapshot_height = config.snapshot_height, ?pool))]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "CLI-facing command entrypoint mirrors explicit command arguments"
+)]
 pub async fn build_airdrop_configuration(
     config: CommonConfig,
     pool: PoolSelection,
@@ -42,9 +42,11 @@ pub async fn build_airdrop_configuration(
     sapling_snapshot_nullifiers: PathBuf,
     orchard_snapshot_nullifiers: PathBuf,
     sapling_target_id: String,
+    sapling_value_commitment_scheme: ValueCommitmentScheme,
     orchard_target_id: String,
+    orchard_value_commitment_scheme: ValueCommitmentScheme,
 ) -> eyre::Result<()> {
-    validate_target_ids(&sapling_target_id, &orchard_target_id)?;
+    validate_target_ids(pool, &sapling_target_id, &orchard_target_id)?;
 
     let scan_range = resolve_snapshot_scan_range(config.network, pool, config.snapshot_height)?;
     let lightwalletd_url =
@@ -96,6 +98,7 @@ pub async fn build_airdrop_configuration(
             note_commitment_root: note_commitment_roots.sapling,
             nullifier_gap_root: sapling_nf_root,
             target_id: sapling_target_id,
+            value_commitment_scheme: sapling_value_commitment_scheme,
         })
     } else {
         None
@@ -108,6 +111,7 @@ pub async fn build_airdrop_configuration(
             note_commitment_root: note_commitment_roots.orchard,
             nullifier_gap_root: orchard_nf_root,
             target_id: orchard_target_id,
+            value_commitment_scheme: orchard_value_commitment_scheme,
         })
     } else {
         None
@@ -127,40 +131,24 @@ pub async fn build_airdrop_configuration(
     Ok(())
 }
 
-fn validate_target_ids(sapling_target_id: &str, orchard_target_id: &str) -> eyre::Result<()> {
-    ensure!(
-        sapling_target_id.len() == 8,
-        "Sapling target_id must be exactly 8 bytes"
-    );
-    ensure!(
-        orchard_target_id.len() <= 32,
-        "Orchard target_id must be at most 32 bytes"
-    );
+fn validate_target_ids(
+    pool: PoolSelection,
+    sapling_target_id: &str,
+    orchard_target_id: &str,
+) -> eyre::Result<()> {
+    if pool.includes_sapling() {
+        ensure!(
+            sapling_target_id.len() == 8,
+            "Sapling target_id must be exactly 8 bytes"
+        );
+    }
+    if pool.includes_orchard() {
+        ensure!(
+            orchard_target_id.len() <= 32,
+            "Orchard target_id must be at most 32 bytes"
+        );
+    }
     Ok(())
-}
-
-const fn sapling_activation_height(network: zcash_protocol::consensus::Network) -> u64 {
-    match network {
-        zcash_protocol::consensus::Network::MainNetwork => SAPLING_MAINNET_START,
-        zcash_protocol::consensus::Network::TestNetwork => SAPLING_TESTNET_START,
-    }
-}
-
-const fn orchard_activation_height(network: zcash_protocol::consensus::Network) -> u64 {
-    match network {
-        zcash_protocol::consensus::Network::MainNetwork => ORCHARD_MAINNET_START,
-        zcash_protocol::consensus::Network::TestNetwork => ORCHARD_TESTNET_START,
-    }
-}
-
-fn scan_start_height(network: zcash_protocol::consensus::Network, pool: PoolSelection) -> u64 {
-    match pool {
-        PoolSelection::Sapling => sapling_activation_height(network),
-        PoolSelection::Orchard => orchard_activation_height(network),
-        PoolSelection::Both => {
-            sapling_activation_height(network).min(orchard_activation_height(network))
-        }
-    }
 }
 
 /// Resolve the scan range for collecting nullifiers for a snapshot.
@@ -242,18 +230,19 @@ mod tests {
     fn deserialize_json_format() {
         // Documents the expected JSON format for consumers.
         let json = r#"{
-          "version": 1,
           "network": "testnet",
           "snapshot_height": 200,
           "sapling": {
             "note_commitment_root": "0101010101010101010101010101010101010101010101010101010101010101",
             "nullifier_gap_root": "0505050505050505050505050505050505050505050505050505050505050505",
-            "target_id": "ZAIRTEST"
+            "target_id": "ZAIRTEST",
+            "value_commitment_scheme": "native"
           },
           "orchard": {
             "note_commitment_root": "0202020202020202020202020202020202020202020202020202020202020202",
             "nullifier_gap_root": "0606060606060606060606060606060606060606060606060606060606060606",
-            "target_id": "ZAIRTEST:Orchard"
+            "target_id": "ZAIRTEST:O",
+            "value_commitment_scheme": "sha256"
           }
         }"#;
 
@@ -267,11 +256,13 @@ mod tests {
                 note_commitment_root: [1_u8; 32],
                 nullifier_gap_root: [5_u8; 32],
                 target_id: "ZAIRTEST".to_string(),
+                value_commitment_scheme: ValueCommitmentScheme::Native,
             }),
             Some(OrchardSnapshot {
                 note_commitment_root: [2_u8; 32],
                 nullifier_gap_root: [6_u8; 32],
-                target_id: "ZAIRTEST:Orchard".to_string(),
+                target_id: "ZAIRTEST:O".to_string(),
+                value_commitment_scheme: ValueCommitmentScheme::Sha256,
             }),
         );
 

@@ -28,6 +28,31 @@ use super::pool_processor::{OrchardPool, PoolClaimResult, PoolProcessor, Sapling
 use crate::common::{resolve_lightwalletd_url, to_zcash_network};
 /// 1 MiB buffer for file I/O.
 const FILE_BUF_SIZE: usize = 1024 * 1024;
+/// Default Sapling snapshot path used by claim flows.
+const DEFAULT_SAPLING_SNAPSHOT_FILE: &str = "snapshot-sapling.bin";
+/// Default Orchard snapshot path used by claim flows.
+const DEFAULT_ORCHARD_SNAPSHOT_FILE: &str = "snapshot-orchard.bin";
+
+fn resolve_snapshot_path_if_enabled(
+    enabled: bool,
+    provided_path: Option<PathBuf>,
+    default_path: &str,
+    pool_name: &str,
+) -> Option<PathBuf> {
+    if !enabled {
+        return provided_path;
+    }
+
+    provided_path.or_else(|| {
+        let path = PathBuf::from(default_path);
+        info!(
+            file = ?path,
+            pool = pool_name,
+            "No snapshot path provided; using default"
+        );
+        Some(path)
+    })
+}
 
 /// Generate airdrop claim
 ///
@@ -55,6 +80,18 @@ pub async fn airdrop_claim(
 ) -> eyre::Result<()> {
     let airdrop_config: AirdropConfiguration =
         serde_json::from_str(&tokio::fs::read_to_string(airdrop_configuration_file).await?)?;
+    let sapling_snapshot_nullifiers = resolve_snapshot_path_if_enabled(
+        airdrop_config.sapling.is_some(),
+        sapling_snapshot_nullifiers,
+        DEFAULT_SAPLING_SNAPSHOT_FILE,
+        "sapling",
+    );
+    let orchard_snapshot_nullifiers = resolve_snapshot_path_if_enabled(
+        airdrop_config.orchard.is_some(),
+        orchard_snapshot_nullifiers,
+        DEFAULT_ORCHARD_SNAPSHOT_FILE,
+        "orchard",
+    );
     validate_pool_inputs(
         &airdrop_config,
         sapling_snapshot_nullifiers.as_ref(),
@@ -65,6 +102,7 @@ pub async fn airdrop_claim(
     let lightwalletd_url = resolve_lightwalletd_url(network, lightwalletd_url.as_deref());
     let ufvk = UnifiedFullViewingKey::decode(&network, &unified_full_viewing_key)
         .map_err(|e| eyre::eyre!("Failed to decode Unified Full Viewing Key: {e:?}"))?;
+    debug!(birthday_height, "Using user-provided birthday height");
 
     let account_notes = find_user_notes(
         &lightwalletd_url,
@@ -100,13 +138,10 @@ pub async fn airdrop_claim(
         .len()
         .checked_add(orchard_result.claims.len());
 
-    let user_proofs = AirdropClaimInputs::new(
-        sapling_result.anchor,
-        orchard_result.anchor,
-        airdrop_config.note_commitment_tree_anchors(),
-        sapling_result.claims,
-        orchard_result.claims,
-    );
+    let user_proofs = AirdropClaimInputs {
+        sapling_claim_input: sapling_result.claims,
+        orchard_claim_input: orchard_result.claims,
+    };
 
     let json = serde_json::to_string_pretty(&user_proofs)?;
     tokio::fs::write(&airdrop_claims_output_file, json).await?;
@@ -135,7 +170,7 @@ fn validate_pool_inputs(
 
     ensure!(
         !(config_has_sapling && sapling_snapshot_nullifiers.is_none()),
-        "Airdrop configuration enables Sapling, but --sapling-snapshot-nullifiers is missing"
+        "Airdrop configuration enables Sapling, but --snapshot-sapling is missing"
     );
     ensure!(
         config_has_sapling || sapling_snapshot_nullifiers.is_none(),
@@ -144,7 +179,7 @@ fn validate_pool_inputs(
 
     ensure!(
         !(config_has_orchard && orchard_snapshot_nullifiers.is_none()),
-        "Airdrop configuration enables Orchard, but --orchard-snapshot-nullifiers is missing"
+        "Airdrop configuration enables Orchard, but --snapshot-orchard is missing"
     );
     ensure!(
         config_has_orchard || orchard_snapshot_nullifiers.is_none(),
@@ -260,9 +295,8 @@ fn generate_claims<M: NoteMetadata>(
             );
 
             Some(ClaimInput {
-                block_height: metadata.block_height(),
                 public_inputs: PublicInputs {
-                    hiding_nullifier: metadata.hiding_nullifier(),
+                    airdrop_nullifier: metadata.hiding_nullifier(),
                 },
                 private_inputs: metadata
                     .to_private_inputs(tree_position, nf_merkle_proof, viewing_keys)
@@ -325,7 +359,7 @@ async fn process_pool_claims<P: PoolProcessor>(
         viewing_keys,
     );
 
-    Ok(PoolClaimResult { anchor, claims })
+    Ok(PoolClaimResult { claims })
 }
 
 /// Load nullifiers from a file.

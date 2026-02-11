@@ -16,8 +16,6 @@ use super::note_metadata::{NoteMetadata, OrchardNoteMetadata, SaplingNoteMetadat
 
 /// Result of processing claims for a single pool.
 pub struct PoolClaimResult<P> {
-    /// The non-membership tree merkle root.
-    pub anchor: [u8; 32],
     /// The claim inputs for this pool.
     pub claims: Vec<ClaimInput<P>>,
 }
@@ -25,10 +23,7 @@ pub struct PoolClaimResult<P> {
 impl<P> PoolClaimResult<P> {
     /// Create an empty result for when a pool has no claims.
     pub const fn empty() -> Self {
-        Self {
-            anchor: [0u8; 32],
-            claims: Vec::new(),
-        }
+        Self { claims: Vec::new() }
     }
 }
 

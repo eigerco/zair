@@ -4,201 +4,407 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use eyre::{Result, ensure, eyre};
+use zair_core::schema::config::ValueCommitmentScheme;
+#[cfg(feature = "prove")]
+use zair_sdk::commands::SaplingSetupScheme;
 use zair_sdk::common::{CommonConfig, PoolSelection};
 use zcash_protocol::consensus::Network;
 
-/// Command-line interface definition
+/// Command-line interface definition.
 #[derive(Debug, Parser)]
 #[command(name = "zair")]
 #[command(about = "Zcash airdrop tools")]
 pub struct Cli {
-    /// Cli subcommands
+    /// CLI top-level command group.
     #[command(subcommand)]
     pub command: Commands,
 }
 
-/// Cli subcommands
+/// Top-level command groups.
 #[derive(Debug, clap::Subcommand)]
 pub enum Commands {
-    /// Build a snapshot of nullifiers from a source
-    BuildConfig {
+    /// Setup utilities (organizer/developer focused).
+    #[cfg(feature = "prove")]
+    Setup {
+        /// Setup subcommands.
+        #[command(subcommand)]
+        command: SetupCommands,
+    },
+    /// Airdrop configuration utilities.
+    Config {
+        /// Config subcommands.
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
+    /// Claim pipeline commands.
+    Claim {
+        /// Claim subcommands.
+        #[command(subcommand)]
+        command: ClaimCommands,
+    },
+    /// Verification pipeline commands.
+    Verify {
+        /// Verify subcommands.
+        #[command(subcommand)]
+        command: VerifyCommands,
+    },
+}
+
+/// Setup command group.
+#[cfg(feature = "prove")]
+#[derive(Debug, clap::Subcommand)]
+pub enum SetupCommands {
+    /// Generate claim circuit parameters (proving and verifying keys).
+    Local {
+        /// Sapling circuit scheme to generate params for.
+        #[arg(
+            long,
+            env = "SETUP_SCHEME",
+            default_value = "native",
+            value_parser = parse_setup_scheme
+        )]
+        scheme: SaplingSetupScheme,
+
+        /// Output file for proving key.
+        #[arg(long, env = "SETUP_PK_OUT", default_value = "setup-sapling-pk.params")]
+        pk_out: PathBuf,
+
+        /// Output file for verifying key.
+        #[arg(long, env = "SETUP_VK_OUT", default_value = "setup-sapling-vk.params")]
+        vk_out: PathBuf,
+    },
+}
+
+/// Config command group.
+#[derive(Debug, clap::Subcommand)]
+pub enum ConfigCommands {
+    /// Build a snapshot of nullifiers from a source.
+    Build {
         /// Build-config specific arguments.
         #[command(flatten)]
         config: BuildConfigArgs,
         /// Pool to include in the exported configuration.
         #[arg(long, env = "POOL", default_value = "both", value_parser = parse_pool_selection)]
         pool: PoolSelection,
-        /// Configuration output file
+        /// Sapling target id used for hiding nullifier derivation. Must be exactly 8 bytes.
         #[arg(
             long,
-            env = "CONFIGURATION_OUTPUT_FILE",
-            default_value = "airdrop_configuration.json"
-        )]
-        configuration_output_file: PathBuf,
-        /// Sapling snapshot nullifiers. This file stores the sapling nullifiers of the snapshot.
-        #[arg(
-            long,
-            env = "SAPLING_SNAPSHOT_NULLIFIERS",
-            default_value = "sapling-snapshot-nullifiers.bin"
-        )]
-        sapling_snapshot_nullifiers: PathBuf,
-        /// Orchard snapshot nullifiers. This file stores the orchard nullifiers of the snapshot.
-        #[arg(
-            long,
-            env = "ORCHARD_SNAPSHOT_NULLIFIERS",
-            default_value = "orchard-snapshot-nullifiers.bin"
-        )]
-        orchard_snapshot_nullifiers: PathBuf,
-        /// Sapling `target_id` used for airdrop nullifier derivation. Must be exactly 8 bytes.
-        #[arg(
-            long,
-            env = "SAPLING_TARGET_ID",
+            env = "TARGET_SAPLING",
             default_value = "ZAIRTEST",
             value_parser = parse_sapling_target_id
         )]
-        sapling_target_id: String,
-        /// Orchard `target_id` used for airdrop nullifier derivation. Must be <= 32 bytes.
+        target_sapling: String,
+        /// Sapling value commitment scheme.
         #[arg(
             long,
-            env = "ORCHARD_TARGET_ID",
-            default_value = "ZAIRTEST:Orchard",
+            env = "SCHEME_SAPLING",
+            default_value = "native",
+            value_parser = parse_value_commitment_scheme
+        )]
+        scheme_sapling: ValueCommitmentScheme,
+        /// Orchard target id used for hiding nullifier derivation. Must be <= 32 bytes.
+        #[arg(
+            long,
+            env = "TARGET_ORCHARD",
+            default_value = "ZAIRTEST:O",
             value_parser = parse_orchard_target_id
         )]
-        orchard_target_id: String,
-    },
-    /// Prepare the airdrop claim.
-    ///
-    /// 1. Build the nullifiers non-membership proof Merkle trees from the snapshot nullifiers.
-    /// 2. Scan the chain for notes belonging to the provided viewing keys.
-    /// 3. Output the non-membership proofs.
-    #[command(verbatim_doc_comment)]
-    ClaimPrepare {
-        /// Optional lightwalletd gRPC endpoint URL override.
-        #[arg(long, env = "LIGHTWALLETD_URL")]
-        lightwalletd_url: Option<String>,
-
-        /// Sapling snapshot nullifiers. This file contains the sapling nullifiers of the snapshot.
-        /// It's used to recreate the Merkle tree of the snapshot for sapling notes.
-        #[arg(long, env = "SAPLING_SNAPSHOT_NULLIFIERS")]
-        sapling_snapshot_nullifiers: Option<PathBuf>,
-        /// Orchard snapshot nullifiers. This file contains the orchard nullifiers of the snapshot.
-        /// It's used to recreate the Merkle tree of the snapshot for orchard notes.
-        #[arg(long, env = "ORCHARD_SNAPSHOT_NULLIFIERS")]
-        orchard_snapshot_nullifiers: Option<PathBuf>,
-
-        /// Unified Full Viewing Key to scan for notes
-        #[arg(long)]
-        unified_full_viewing_key: String,
-
-        /// Birthday height for the provided viewing keys
-        #[arg(long, env = "BIRTHDAY_HEIGHT", default_value_t = 419_200)]
-        birthday_height: u64,
-
-        /// Export the valid airdrop claims to this JSON file
+        target_orchard: String,
+        /// Orchard value commitment scheme.
         #[arg(
             long,
-            env = "AIRDROP_CLAIMS_FILE",
-            default_value = "airdrop_claims.json"
+            env = "SCHEME_ORCHARD",
+            default_value = "native",
+            value_parser = parse_value_commitment_scheme
         )]
-        airdrop_claims_output_file: PathBuf,
-        /// Airdrop configuration JSON file
+        scheme_orchard: ValueCommitmentScheme,
+        /// Configuration output file.
+        #[arg(long, env = "CONFIG_OUT", default_value = "config.json")]
+        config_out: PathBuf,
+        /// Sapling snapshot nullifiers output file.
         #[arg(
             long,
-            env = "AIRDROP_CONFIGURATION_FILE",
-            default_value = "airdrop_configuration.json"
+            env = "SNAPSHOT_OUT_SAPLING",
+            default_value = "snapshot-sapling.bin"
         )]
-        airdrop_configuration_file: PathBuf,
-    },
-    /// Prints the schema of the airdrop configuration JSON file
-    ConfigSchema,
-    /// Generate claim proofs using custom claim circuit
-    #[cfg(feature = "prove")]
-    Prove {
-        /// Input file containing claim inputs (from `claim-prepare` command)
-        #[arg(long, env = "AIRDROP_CLAIMS_FILE")]
-        claim_inputs_file: PathBuf,
-
-        /// Output file for generated claim proofs
+        snapshot_out_sapling: PathBuf,
+        /// Orchard snapshot nullifiers output file.
         #[arg(
             long,
-            env = "CLAIM_PROOFS_FILE",
-            default_value = "airdrop_claim_proofs.json"
+            env = "SNAPSHOT_OUT_ORCHARD",
+            default_value = "snapshot-orchard.bin"
         )]
-        proofs_output_file: PathBuf,
-
-        /// Path to file containing 64-byte seed as hex for deriving spending keys
-        #[arg(long, env = "SEED_FILE")]
-        seed_file: PathBuf,
-
-        /// Network to use (mainnet or testnet)
-        #[arg(long, env = "NETWORK", default_value = "mainnet", value_parser = parse_network)]
-        network: Network,
-
-        /// Path to proving key file (will be generated if not exists)
-        #[arg(
-            long,
-            env = "PROVING_KEY_FILE",
-            default_value = "claim_proving_key.params"
-        )]
-        proving_key_file: PathBuf,
-    },
-    /// Generate claim circuit parameters (proving and verifying keys)
-    #[cfg(feature = "prove")]
-    SetupLocal {
-        /// Output file for proving key
-        #[arg(
-            long,
-            env = "PROVING_KEY_FILE",
-            default_value = "claim_proving_key.params"
-        )]
-        proving_key_file: PathBuf,
-
-        /// Output file for verifying key
-        #[arg(
-            long,
-            env = "VERIFYING_KEY_FILE",
-            default_value = "claim_verifying_key.params"
-        )]
-        verifying_key_file: PathBuf,
-    },
-    /// Verify claim proofs from a proofs file (output of `prove`)
-    Verify {
-        /// JSON file containing claim proofs (from `prove` command)
-        #[arg(long, env = "CLAIM_PROOFS_FILE")]
-        proofs_file: PathBuf,
-
-        /// Path to the verifying key file
-        #[arg(
-            long,
-            env = "VERIFYING_KEY_FILE",
-            default_value = "claim_verifying_key.params"
-        )]
-        verifying_key_file: PathBuf,
+        snapshot_out_orchard: PathBuf,
     },
 }
 
-/// Common arguments for build-config.
+/// Claim command group.
+#[derive(Debug, clap::Subcommand)]
+pub enum ClaimCommands {
+    /// Recommended end-to-end claim pipeline:
+    /// `prepare -> prove -> sign`.
+    #[cfg(feature = "prove")]
+    Run {
+        /// Airdrop configuration file.
+        #[arg(
+            long,
+            env = "CONFIG_FILE",
+            value_name = "CONFIG_FILE",
+            default_value = "config.json"
+        )]
+        config: PathBuf,
+        /// Path to file containing 64-byte seed as hex.
+        #[arg(long, env = "SEED_FILE", value_name = "SEED_FILE")]
+        seed: PathBuf,
+        /// Message payload file to bind into submission signatures.
+        #[arg(
+            long,
+            env = "MESSAGE_FILE",
+            value_name = "MESSAGE_FILE",
+            default_value = "claim-message.bin"
+        )]
+        msg: PathBuf,
+        /// Sapling snapshot nullifiers file.
+        /// Defaults to `snapshot-sapling.bin` when Sapling is enabled in config.
+        #[arg(long, env = "SNAPSHOT_SAPLING_FILE")]
+        snapshot_sapling: Option<PathBuf>,
+        /// Orchard snapshot nullifiers file.
+        /// Defaults to `snapshot-orchard.bin` when Orchard is enabled in config.
+        #[arg(long, env = "SNAPSHOT_ORCHARD_FILE")]
+        snapshot_orchard: Option<PathBuf>,
+        /// Path to proving key file.
+        #[arg(
+            long,
+            env = "PROVING_KEY_FILE",
+            value_name = "PROVING_KEY_FILE",
+            default_value = "setup-sapling-pk.params"
+        )]
+        pk: PathBuf,
+        /// ZIP-32 account index used to derive Sapling keys from the seed.
+        #[arg(long, env = "ACCOUNT_ID", default_value_t = 0_u32)]
+        account: u32,
+        /// Scan start height for note discovery.
+        #[arg(long, env = "BIRTHDAY")]
+        birthday: u64,
+        /// Optional lightwalletd gRPC endpoint URL override.
+        #[arg(long, env = "LIGHTWALLETD_URL")]
+        lightwalletd: Option<String>,
+        /// Output file for prepared claims JSON.
+        #[arg(long, env = "CLAIMS_OUT", default_value = "claim-prepared.json")]
+        claims_out: PathBuf,
+        /// Output file for generated proofs.
+        #[arg(long, env = "PROOFS_OUT", default_value = "claim-proofs.json")]
+        proofs_out: PathBuf,
+        /// Output file for local-only claim secrets.
+        #[arg(long, env = "SECRETS_OUT", default_value = "claim-proofs-secrets.json")]
+        secrets_out: PathBuf,
+        /// Output file for signed claim submission bundle.
+        #[arg(long, env = "SUBMISSION_OUT", default_value = "claim-submission.json")]
+        submission_out: PathBuf,
+    },
+    /// Prepare the airdrop claim.
+    #[command(verbatim_doc_comment)]
+    Prepare {
+        /// Airdrop configuration file.
+        #[arg(
+            long,
+            env = "CONFIG_FILE",
+            value_name = "CONFIG_FILE",
+            default_value = "config.json"
+        )]
+        config: PathBuf,
+        /// Unified Full Viewing Key to scan for notes.
+        #[arg(long, env = "UFVK")]
+        ufvk: String,
+        /// Sapling snapshot nullifiers file.
+        /// Defaults to `snapshot-sapling.bin` when Sapling is enabled in config.
+        #[arg(long, env = "SNAPSHOT_SAPLING_FILE")]
+        snapshot_sapling: Option<PathBuf>,
+        /// Orchard snapshot nullifiers file.
+        /// Defaults to `snapshot-orchard.bin` when Orchard is enabled in config.
+        #[arg(long, env = "SNAPSHOT_ORCHARD_FILE")]
+        snapshot_orchard: Option<PathBuf>,
+        /// Scan start height for note discovery.
+        #[arg(long, env = "BIRTHDAY")]
+        birthday: u64,
+        /// Optional lightwalletd gRPC endpoint URL override.
+        #[arg(long, env = "LIGHTWALLETD_URL")]
+        lightwalletd: Option<String>,
+        /// Output file for prepared claims JSON.
+        #[arg(long, env = "CLAIMS_OUT", default_value = "claim-prepared.json")]
+        claims_out: PathBuf,
+    },
+    /// Generate claim proofs using custom claim circuit.
+    #[cfg(feature = "prove")]
+    Prove {
+        /// Airdrop configuration file.
+        #[arg(
+            long,
+            env = "CONFIG_FILE",
+            value_name = "CONFIG_FILE",
+            default_value = "config.json"
+        )]
+        config: PathBuf,
+        /// Input file containing claim inputs.
+        #[arg(long, env = "CLAIMS_IN", default_value = "claim-prepared.json")]
+        claims_in: PathBuf,
+        /// Path to file containing 64-byte seed as hex for deriving spending keys.
+        #[arg(long, env = "SEED_FILE", value_name = "SEED_FILE")]
+        seed: PathBuf,
+        /// Path to proving key file.
+        #[arg(
+            long,
+            env = "PROVING_KEY_FILE",
+            value_name = "PROVING_KEY_FILE",
+            default_value = "setup-sapling-pk.params"
+        )]
+        pk: PathBuf,
+        /// ZIP-32 account index used to derive Sapling keys from the seed.
+        #[arg(long, env = "ACCOUNT_ID", default_value_t = 0_u32)]
+        account: u32,
+        /// Output file for generated claim proofs.
+        #[arg(long, env = "PROOFS_OUT", default_value = "claim-proofs.json")]
+        proofs_out: PathBuf,
+        /// Output file for local-only claim secrets.
+        #[arg(long, env = "SECRETS_OUT", default_value = "claim-proofs-secrets.json")]
+        secrets_out: PathBuf,
+    },
+    /// Sign a Sapling proof bundle into a submission package.
+    Sign {
+        /// Airdrop configuration file.
+        #[arg(
+            long,
+            env = "CONFIG_FILE",
+            value_name = "CONFIG_FILE",
+            default_value = "config.json"
+        )]
+        config: PathBuf,
+        /// Proofs file generated by `claim prove`.
+        #[arg(long, env = "PROOFS_IN", default_value = "claim-proofs.json")]
+        proofs_in: PathBuf,
+        /// Local-only secrets file generated by `claim prove`.
+        #[arg(long, env = "SECRETS_IN", default_value = "claim-proofs-secrets.json")]
+        secrets_in: PathBuf,
+        /// Path to file containing 64-byte seed as hex for deriving spending keys.
+        #[arg(long, env = "SEED_FILE", value_name = "SEED_FILE")]
+        seed: PathBuf,
+        /// Message payload file to bind into submission signatures.
+        #[arg(
+            long,
+            env = "MESSAGE_FILE",
+            value_name = "MESSAGE_FILE",
+            default_value = "claim-message.bin"
+        )]
+        msg: PathBuf,
+        /// ZIP-32 account index used to derive Sapling keys from the seed.
+        #[arg(long, env = "ACCOUNT_ID", default_value_t = 0_u32)]
+        account: u32,
+        /// Output file for signed submission bundle.
+        #[arg(long, env = "SUBMISSION_OUT", default_value = "claim-submission.json")]
+        submission_out: PathBuf,
+    },
+}
+
+/// Verify command group.
+#[derive(Debug, clap::Subcommand)]
+pub enum VerifyCommands {
+    /// Recommended end-to-end verification:
+    /// `verify proof -> verify signature`.
+    Run {
+        /// Airdrop configuration file used for proof/signature binding checks.
+        #[arg(
+            long,
+            env = "CONFIG_FILE",
+            value_name = "CONFIG_FILE",
+            default_value = "config.json"
+        )]
+        config: PathBuf,
+        /// Path to the verifying key file.
+        #[arg(
+            long,
+            env = "VERIFYING_KEY_FILE",
+            value_name = "VERIFYING_KEY_FILE",
+            default_value = "setup-sapling-vk.params"
+        )]
+        vk: PathBuf,
+        /// Signed submission file generated by `claim sign`.
+        #[arg(long, env = "SUBMISSION_IN", default_value = "claim-submission.json")]
+        submission_in: PathBuf,
+        /// Message payload file used when signing.
+        #[arg(
+            long,
+            env = "MESSAGE_FILE",
+            value_name = "MESSAGE_FILE",
+            default_value = "claim-message.bin"
+        )]
+        msg: PathBuf,
+    },
+    /// Verify claim proofs from a proofs file.
+    Proof {
+        /// Airdrop configuration file used to bind expected roots and scheme.
+        #[arg(
+            long,
+            env = "CONFIG_FILE",
+            value_name = "CONFIG_FILE",
+            default_value = "config.json"
+        )]
+        config: PathBuf,
+        /// Path to the verifying key file.
+        #[arg(
+            long,
+            env = "VERIFYING_KEY_FILE",
+            value_name = "VERIFYING_KEY_FILE",
+            default_value = "setup-sapling-vk.params"
+        )]
+        vk: PathBuf,
+        /// JSON file containing claim proofs.
+        #[arg(long, env = "PROOFS_IN", default_value = "claim-proofs.json")]
+        proofs_in: PathBuf,
+    },
+    /// Verify signatures in a signed claim submission.
+    Signature {
+        /// Airdrop configuration file used to bind expected target-id and pool.
+        #[arg(
+            long,
+            env = "CONFIG_FILE",
+            value_name = "CONFIG_FILE",
+            default_value = "config.json"
+        )]
+        config: PathBuf,
+        /// Signed submission file generated by `claim sign`.
+        #[arg(long, env = "SUBMISSION_IN", default_value = "claim-submission.json")]
+        submission_in: PathBuf,
+        /// Message payload file used when signing.
+        #[arg(
+            long,
+            env = "MESSAGE_FILE",
+            value_name = "MESSAGE_FILE",
+            default_value = "claim-message.bin"
+        )]
+        msg: PathBuf,
+    },
+}
+
+/// Common arguments for `config build`.
 #[derive(Debug, clap::Args)]
 pub struct BuildConfigArgs {
-    /// Network to use (mainnet or testnet)
+    /// Network to use (mainnet or testnet).
     #[arg(long, env = "NETWORK", default_value = "mainnet", value_parser = parse_network)]
     pub network: Network,
-
     /// Snapshot block height (inclusive).
     #[arg(long, env = "SNAPSHOT_HEIGHT")]
-    pub snapshot_height: u64,
-
+    pub height: u64,
     /// Optional lightwalletd gRPC endpoint URL override.
     #[arg(long, env = "LIGHTWALLETD_URL")]
-    pub lightwalletd_url: Option<String>,
+    pub lightwalletd: Option<String>,
 }
 
 impl From<BuildConfigArgs> for CommonConfig {
     fn from(args: BuildConfigArgs) -> Self {
         Self {
             network: args.network,
-            snapshot_height: args.snapshot_height,
-            lightwalletd_url: args.lightwalletd_url,
+            snapshot_height: args.height,
+            lightwalletd_url: args.lightwalletd,
         }
     }
 }
@@ -234,20 +440,40 @@ fn parse_orchard_target_id(s: &str) -> Result<String> {
     Ok(s.to_string())
 }
 
+fn parse_value_commitment_scheme(s: &str) -> Result<ValueCommitmentScheme> {
+    match s {
+        "native" => Ok(ValueCommitmentScheme::Native),
+        "sha256" => Ok(ValueCommitmentScheme::Sha256),
+        other => Err(eyre!(
+            "Invalid value commitment scheme: {other}. Expected 'native' or 'sha256'."
+        )),
+    }
+}
+
+#[cfg(feature = "prove")]
+fn parse_setup_scheme(s: &str) -> Result<SaplingSetupScheme> {
+    match s {
+        "native" => Ok(SaplingSetupScheme::Native),
+        "sha256" => Ok(SaplingSetupScheme::Sha256),
+        other => Err(eyre!(
+            "Invalid setup scheme: {other}. Expected 'native' or 'sha256'."
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use clap::Parser as _;
+
     use super::*;
 
     #[test]
     fn network_parse() {
         let network = parse_network("mainnet").expect("Failed to parse mainnet");
         assert_eq!(network, Network::MainNetwork);
-
         let network = parse_network("testnet").expect("Failed to parse testnet");
         assert_eq!(network, Network::TestNetwork);
-
-        let network = parse_network("invalid_network");
-        assert!(network.is_err());
+        assert!(parse_network("invalid_network").is_err());
     }
 
     #[test]
@@ -267,12 +493,24 @@ mod tests {
         assert!(parse_pool_selection("nope").is_err());
     }
 
+    #[cfg(feature = "prove")]
     #[test]
-    fn target_id_validation() {
-        assert!(parse_sapling_target_id("ZAIRTEST").is_ok());
-        assert!(parse_sapling_target_id("short").is_err());
+    fn parse_claim_run_command() {
+        let cli = Cli::try_parse_from([
+            "zair",
+            "claim",
+            "run",
+            "--seed",
+            "seed.txt",
+            "--birthday",
+            "3663119",
+        ]);
+        assert!(cli.is_ok());
+    }
 
-        assert!(parse_orchard_target_id("ZAIRTEST:Orchard").is_ok());
-        assert!(parse_orchard_target_id(&"x".repeat(33)).is_err());
+    #[test]
+    fn parse_verify_run_command() {
+        let cli = Cli::try_parse_from(["zair", "verify", "run"]);
+        assert!(cli.is_ok());
     }
 }

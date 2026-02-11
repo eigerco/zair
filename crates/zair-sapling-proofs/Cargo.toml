@@ -17,6 +17,7 @@ prove = [
   "dep:incrementalmerkletree",
   "dep:rand",
   "dep:sapling",
+  "dep:sha2",
 ]
 
 [dependencies]
@@ -33,6 +34,7 @@ group = { workspace = true, optional = true }
 incrementalmerkletree = { workspace = true, optional = true }
 rand = { version = "0.8", optional = true }
 sapling = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 
 [lints]
 workspace = true

@@ -52,28 +52,29 @@ fn test_build_airdrop_configuration() {
     let sapling_nullifiers_path = temp_dir.path().join("sapling-nullifiers.bin");
     let orchard_nullifiers_path = temp_dir.path().join("orchard-nullifiers.bin");
 
-    // Execute the `zair build-config` subcommand
+    // Execute the `zair config build` subcommand
     let mut cmd = cargo_bin_cmd!("zair");
 
     let snapshot_height = 3_743_871_u64;
 
     cmd.args([
-        "build-config",
+        "config",
+        "build",
         "--network",
         "testnet",
-        "--lightwalletd-url",
+        "--lightwalletd",
         LIGHTWALLETD_URL,
-        "--snapshot-height",
+        "--height",
         format!("{snapshot_height}").as_str(),
-        "--configuration-output-file",
+        "--config-out",
         output_config_path
             .to_str()
             .expect("Failed to convert path to str"),
-        "--sapling-snapshot-nullifiers",
+        "--snapshot-out-sapling",
         sapling_nullifiers_path
             .to_str()
             .expect("Failed to convert path to str"),
-        "--orchard-snapshot-nullifiers",
+        "--snapshot-out-orchard",
         orchard_nullifiers_path
             .to_str()
             .expect("Failed to convert path to str"),
@@ -137,7 +138,6 @@ fn test_build_airdrop_configuration() {
         "Orchard note commitment root does not match expected value"
     );
 
-    assert_eq!(configuration.version, 1);
     assert_eq!(configuration.network, AirdropNetwork::Testnet);
     assert_eq!(configuration.snapshot_height, snapshot_height);
     assert_eq!(
@@ -154,6 +154,6 @@ fn test_build_airdrop_configuration() {
             .as_ref()
             .expect("orchard should be present")
             .target_id,
-        "ZAIRTEST:Orchard"
+        "ZAIRTEST:O"
     );
 }
