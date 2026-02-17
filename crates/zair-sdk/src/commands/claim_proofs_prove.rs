@@ -27,7 +27,6 @@ use zip32::AccountId;
 
 use super::claim_proofs::{
     ClaimProofsOutput, ClaimSecretsOutput, SaplingClaimProofResult, SaplingClaimSecretResult,
-    to_sapling_value_commitment_scheme,
 };
 use crate::common::to_zcash_network;
 
@@ -327,7 +326,7 @@ pub async fn generate_claim_proofs(
         )
     };
     let sapling_scheme = sapling_config.map_or(SaplingValueCommitmentScheme::Native, |s| {
-        to_sapling_value_commitment_scheme(s.value_commitment_scheme)
+        s.value_commitment_scheme.into()
     });
 
     info!(file = ?seed_file, "Reading seed from file...");

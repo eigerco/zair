@@ -15,9 +15,7 @@ use rand::RngCore;
 pub use sapling::MerklePath;
 use sapling::value::{NoteValue, ValueCommitTrapdoor};
 use sapling::{Diversifier, Note, ProofGenerationKey, Rseed};
-use zair_sapling_circuit::circuit::{
-    Claim, ValueCommitmentOpening, ValueCommitmentScheme as CircuitValueCommitmentScheme,
-};
+use zair_sapling_circuit::circuit::{Claim, ValueCommitmentOpening};
 
 use crate::error::ClaimProofError;
 use crate::types::{GROTH_PROOF_SIZE, GrothProofBytes, ValueCommitmentScheme};
@@ -129,10 +127,7 @@ pub fn prepare_circuit(
         nm_right_nf: Some(nm_right_nf),
         nm_merkle_path,
         nm_anchor: Some(nm_anchor),
-        value_commitment_scheme: match value_commitment_scheme {
-            ValueCommitmentScheme::Native => CircuitValueCommitmentScheme::Native,
-            ValueCommitmentScheme::Sha256 => CircuitValueCommitmentScheme::Sha256,
-        },
+        value_commitment_scheme: value_commitment_scheme.into(),
         rcv_sha256,
     })
 }

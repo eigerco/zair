@@ -15,6 +15,25 @@ pub enum ValueCommitmentScheme {
     Sha256,
 }
 
+#[cfg(feature = "prove")]
+impl From<ValueCommitmentScheme> for zair_sapling_circuit::ValueCommitmentScheme {
+    fn from(scheme: ValueCommitmentScheme) -> Self {
+        match scheme {
+            ValueCommitmentScheme::Native => Self::Native,
+            ValueCommitmentScheme::Sha256 => Self::Sha256,
+        }
+    }
+}
+
+impl From<zair_core::schema::config::ValueCommitmentScheme> for ValueCommitmentScheme {
+    fn from(scheme: zair_core::schema::config::ValueCommitmentScheme) -> Self {
+        match scheme {
+            zair_core::schema::config::ValueCommitmentScheme::Native => Self::Native,
+            zair_core::schema::config::ValueCommitmentScheme::Sha256 => Self::Sha256,
+        }
+    }
+}
+
 /// Input data required to generate a claim proof (raw bytes format).
 ///
 /// This struct provides a convenient way to pass proof inputs as raw bytes,

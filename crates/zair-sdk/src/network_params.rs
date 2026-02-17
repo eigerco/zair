@@ -4,13 +4,13 @@ use zcash_protocol::consensus::Network;
 
 use crate::common::PoolSelection;
 
-/// Sapling activation height on mainnet, see <https://zips.z.cash/zip-0205>.
+/// Sapling activation height on mainnet, see [ZIP 205](https://zips.z.cash/zip-0205).
 pub const SAPLING_MAINNET_START: u64 = 419_200;
-/// Sapling activation height on testnet, see <https://zips.z.cash/zip-0205>.
+/// Sapling activation height on testnet, see [ZIP 205](https://zips.z.cash/zip-0205).
 pub const SAPLING_TESTNET_START: u64 = 280_000;
-/// Orchard activation height on mainnet, see <https://zips.z.cash/zip-0252>.
+/// Orchard activation height on mainnet, see [ZIP 252](https://zips.z.cash/zip-0252).
 pub const ORCHARD_MAINNET_START: u64 = 1_687_104;
-/// Orchard activation height on testnet, see <https://zips.z.cash/zip-0252>.
+/// Orchard activation height on testnet, see [ZIP 252](https://zips.z.cash/zip-0252).
 pub const ORCHARD_TESTNET_START: u64 = 1_842_420;
 
 /// Sapling activation height for the given network.

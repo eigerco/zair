@@ -8,9 +8,7 @@ use serde_with::hex::Hex;
 use serde_with::serde_as;
 use tracing::{info, warn};
 use zair_core::base::Nullifier;
-use zair_core::schema::config::{
-    AirdropConfiguration, ValueCommitmentScheme as ConfigValueCommitmentScheme,
-};
+use zair_core::schema::config::AirdropConfiguration;
 use zair_sapling_proofs::verifier::{
     ValueCommitmentScheme as SaplingValueCommitmentScheme, verify_claim_proof_bytes,
 };
@@ -74,15 +72,6 @@ pub struct SaplingClaimSecretResult {
     pub rcv_sha256: Option<[u8; 32]>,
 }
 
-pub(super) const fn to_sapling_value_commitment_scheme(
-    scheme: ConfigValueCommitmentScheme,
-) -> SaplingValueCommitmentScheme {
-    match scheme {
-        ConfigValueCommitmentScheme::Native => SaplingValueCommitmentScheme::Native,
-        ConfigValueCommitmentScheme::Sha256 => SaplingValueCommitmentScheme::Sha256,
-    }
-}
-
 /// Verify all Sapling claim proofs from a proofs file (output of prove).
 ///
 /// # Arguments
@@ -141,7 +130,7 @@ pub(super) async fn verify_claim_sapling_proofs(
                 "Sapling proofs provided, but airdrop configuration has no sapling pool",
             )?;
             (
-                to_sapling_value_commitment_scheme(sapling.value_commitment_scheme),
+                sapling.value_commitment_scheme.into(),
                 sapling.note_commitment_root,
                 sapling.nullifier_gap_root,
             )

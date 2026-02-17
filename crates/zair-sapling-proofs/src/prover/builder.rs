@@ -9,7 +9,7 @@ use bellman::groth16::{Parameters, generate_random_parameters};
 use bls12_381::Bls12;
 use rand::rngs::OsRng;
 use zair_nonmembership::NON_MEMBERSHIP_TREE_DEPTH;
-use zair_sapling_circuit::{Claim, ValueCommitmentScheme as CircuitValueCommitmentScheme};
+use zair_sapling_circuit::Claim;
 
 use crate::prover::proving::ClaimParameters;
 use crate::types::ValueCommitmentScheme;
@@ -60,10 +60,7 @@ pub fn generate_parameters(
         nm_right_nf: None,
         nm_merkle_path: vec![None; usize::from(NON_MEMBERSHIP_TREE_DEPTH)],
         nm_anchor: None,
-        value_commitment_scheme: match value_commitment_scheme {
-            ValueCommitmentScheme::Native => CircuitValueCommitmentScheme::Native,
-            ValueCommitmentScheme::Sha256 => CircuitValueCommitmentScheme::Sha256,
-        },
+        value_commitment_scheme: value_commitment_scheme.into(),
         rcv_sha256: None,
     };
 

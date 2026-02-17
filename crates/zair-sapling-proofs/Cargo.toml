@@ -26,6 +26,7 @@ bls12_381 = { workspace = true }
 jubjub = { workspace = true }
 thiserror = { workspace = true }
 
+zair-core = { workspace = true }
 zair-nonmembership = { workspace = true, optional = true }
 zair-sapling-circuit = { workspace = true, optional = true }
 

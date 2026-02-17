@@ -3816,6 +3816,7 @@ dependencies = [
  "sapling-crypto",
  "sha2 0.10.9",
  "thiserror 2.0.18",
+ "zair-core",
  "zair-nonmembership",
  "zair-sapling-circuit",
 ]

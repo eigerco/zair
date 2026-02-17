@@ -69,146 +69,95 @@ async fn main() -> eyre::Result<()> {
             } => zair_sdk::commands::generate_claim_params(pk_out, vk_out, scheme).await,
         },
         Commands::Config { command } => match command {
-            ConfigCommands::Build {
-                config,
-                pool,
-                target_sapling,
-                scheme_sapling,
-                target_orchard,
-                scheme_orchard,
-                config_out,
-                snapshot_out_sapling,
-                snapshot_out_orchard,
-            } => {
+            ConfigCommands::Build { args } => {
                 build_airdrop_configuration(
-                    config.into(),
-                    pool,
-                    config_out,
-                    snapshot_out_sapling,
-                    snapshot_out_orchard,
-                    target_sapling,
-                    scheme_sapling,
-                    target_orchard,
-                    scheme_orchard,
+                    args.config.into(),
+                    args.pool,
+                    args.config_out,
+                    args.snapshot_out_sapling,
+                    args.snapshot_out_orchard,
+                    args.target_sapling,
+                    args.scheme_sapling,
+                    args.target_orchard,
+                    args.scheme_orchard,
                 )
                 .await
             }
         },
         Commands::Claim { command } => match command {
             #[cfg(feature = "prove")]
-            ClaimCommands::Run {
-                config,
-                seed,
-                msg,
-                snapshot_sapling,
-                snapshot_orchard,
-                pk,
-                account,
-                birthday,
-                lightwalletd,
-                claims_out,
-                proofs_out,
-                secrets_out,
-                submission_out,
-            } => {
+            ClaimCommands::Run { args } => {
                 zair_sdk::commands::claim_run(
-                    lightwalletd,
-                    snapshot_sapling,
-                    snapshot_orchard,
-                    birthday,
-                    claims_out,
-                    proofs_out,
-                    secrets_out,
-                    submission_out,
-                    seed,
-                    account,
-                    pk,
-                    msg,
-                    config,
+                    args.lightwalletd,
+                    args.snapshot_sapling,
+                    args.snapshot_orchard,
+                    args.birthday,
+                    args.claims_out,
+                    args.proofs_out,
+                    args.secrets_out,
+                    args.submission_out,
+                    args.seed,
+                    args.account,
+                    args.pk,
+                    args.msg,
+                    args.config,
                 )
                 .await
             }
-            ClaimCommands::Prepare {
-                config,
-                ufvk,
-                snapshot_sapling,
-                snapshot_orchard,
-                birthday,
-                lightwalletd,
-                claims_out,
-            } => {
+            ClaimCommands::Prepare { args } => {
                 airdrop_claim(
-                    lightwalletd,
-                    snapshot_sapling,
-                    snapshot_orchard,
-                    ufvk,
-                    birthday,
-                    claims_out,
-                    config,
+                    args.lightwalletd,
+                    args.snapshot_sapling,
+                    args.snapshot_orchard,
+                    args.ufvk,
+                    args.birthday,
+                    args.claims_out,
+                    args.config,
                 )
                 .await
             }
             #[cfg(feature = "prove")]
-            ClaimCommands::Prove {
-                config,
-                claims_in,
-                seed,
-                pk,
-                account,
-                proofs_out,
-                secrets_out,
-            } => {
+            ClaimCommands::Prove { args } => {
                 zair_sdk::commands::generate_claim_proofs(
-                    claims_in,
-                    proofs_out,
-                    seed,
-                    account,
-                    pk,
-                    secrets_out,
-                    config,
+                    args.claims_in,
+                    args.proofs_out,
+                    args.seed,
+                    args.account,
+                    args.pk,
+                    args.secrets_out,
+                    args.config,
                 )
                 .await
             }
-            ClaimCommands::Sign {
-                config,
-                proofs_in,
-                secrets_in,
-                seed,
-                msg,
-                account,
-                submission_out,
-            } => {
+            ClaimCommands::Sign { args } => {
                 zair_sdk::commands::sign_claim_submission(
-                    proofs_in,
-                    secrets_in,
-                    seed,
-                    account,
-                    config,
-                    msg,
-                    submission_out,
+                    args.proofs_in,
+                    args.secrets_in,
+                    args.seed,
+                    args.account,
+                    args.config,
+                    args.msg,
+                    args.submission_out,
                 )
                 .await
             }
         },
         Commands::Verify { command } => match command {
-            VerifyCommands::Run {
-                config,
-                vk,
-                submission_in,
-                msg,
-            } => zair_sdk::commands::verify_run(vk, submission_in, msg, config).await,
-            VerifyCommands::Proof {
-                config,
-                vk,
-                proofs_in,
-            } => zair_sdk::commands::verify_claim_sapling_proof(proofs_in, vk, config).await,
-            VerifyCommands::Signature {
-                config,
-                submission_in,
-                msg,
-            } => {
-                zair_sdk::commands::verify_claim_submission_signature(submission_in, msg, config)
+            VerifyCommands::Run { args } => {
+                zair_sdk::commands::verify_run(args.vk, args.submission_in, args.msg, args.config)
                     .await
+            }
+            VerifyCommands::Proof { args } => {
+                zair_sdk::commands::verify_claim_sapling_proof(args.proofs_in, args.vk, args.config)
+                    .await
+            }
+            VerifyCommands::Signature { args } => {
+                zair_sdk::commands::verify_claim_submission_signature(
+                    args.submission_in,
+                    args.msg,
+                    args.config,
+                )
+                .await
             }
         },
     };
