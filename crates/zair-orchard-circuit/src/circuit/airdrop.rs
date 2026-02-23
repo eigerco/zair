@@ -10,7 +10,7 @@
 
 use std::vec::Vec;
 
-use ff::{PrimeField as _, PrimeFieldBits as _};
+use ff::PrimeField as _;
 use group::{Curve as _, Group as _};
 use halo2_gadgets::ecc::chip::{EccChip, EccConfig};
 use halo2_gadgets::ecc::{FixedPoint, NonIdentityPoint, ScalarFixed, ScalarFixedShort, ScalarVar};
@@ -93,6 +93,11 @@ impl ValueCommitmentScheme {
     }
 }
 
+type OrchardMerkleConfig =
+    MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>;
+type OrchardSinsemillaConfig =
+    SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>;
+
 /// Configuration for the Orchard airdrop circuit.
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -102,12 +107,10 @@ pub struct Config {
     sha256_config: sha256::Table16Config,
     ecc_config: EccConfig<OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
-    merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    sinsemilla_config_1:
-        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    sinsemilla_config_2:
-        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+    merkle_config_1: OrchardMerkleConfig,
+    merkle_config_2: OrchardMerkleConfig,
+    sinsemilla_config_1: OrchardSinsemillaConfig,
+    sinsemilla_config_2: OrchardSinsemillaConfig,
     commit_ivk_config: CommitIvkConfig,
     note_commit_config: NoteCommitConfig,
 
@@ -316,10 +319,10 @@ fn value_commitment_sha256_block(
             block[4..12].copy_from_slice(&v.inner().to_le_bytes());
             block[12..44].copy_from_slice(&rv);
 
-            let message_len = 44usize;
-            block[44] = 0x80;
-            let bit_len = (message_len as u64) * 8;
-            block[56..64].copy_from_slice(&bit_len.to_be_bytes());
+            const MESSAGE_LEN: usize = 44;
+            block[MESSAGE_LEN] = 0x80;
+            const BIT_LEN: u64 = (MESSAGE_LEN as u64) * 8;
+            block[56..64].copy_from_slice(&BIT_LEN.to_be_bytes());
 
             let j = word_index * 4;
             u32::from_be_bytes([block[j], block[j + 1], block[j + 2], block[j + 3]])
@@ -334,23 +337,15 @@ fn value_commitment_sha256_block(
 /// - `msb` is bit 254 (0/1),
 /// - `mid` is bits 128..=253 (126 bits) as an integer,
 /// - `low` is bits 0..=127 (128 bits) as an integer.
-fn decompose_u128_parts(x: &pallas::Base) -> (u64, u128, u128) {
-    let bits = x.to_le_bits();
-    let msb = u64::from(bits[254]);
+fn decompose_u128_parts(x: &pallas::Base) -> (bool, u128, u128) {
+    let repr = x.to_repr();
+    let bytes: &[u8] = repr.as_ref();
 
-    let mut low = 0u128;
-    for i in 0..128 {
-        if bits[i] {
-            low |= 1u128 << i;
-        }
-    }
+    let low = u128::from_le_bytes(bytes[0..16].try_into().unwrap());
+    let high = u128::from_le_bytes(bytes[16..32].try_into().unwrap());
 
-    let mut mid = 0u128;
-    for i in 0..126 {
-        if bits[128 + i] {
-            mid |= 1u128 << i;
-        }
-    }
+    let mid = high & ((1u128 << 126) - 1);
+    let msb = (high >> 126) & 1 == 1;
 
     (msb, mid, low)
 }
@@ -683,7 +678,7 @@ impl plonk::Circuit<pallas::Base> for Circuit {
         };
 
         // === Spend validating key randomization => rk ===
-        let _rk = {
+        {
             let spend_auth_g =
                 FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::SpendAuthG);
             let (alpha_commitment, _alpha) =
@@ -691,8 +686,7 @@ impl plonk::Circuit<pallas::Base> for Circuit {
             let rk = alpha_commitment.add(layouter.namespace(|| "rk"), &ak_p)?;
             layouter.constrain_instance(rk.inner().x().cell(), config.primary, RK_X)?;
             layouter.constrain_instance(rk.inner().y().cell(), config.primary, RK_Y)?;
-            rk
-        };
+        }
 
         // === Recipient integrity: pk_d == [ivk] g_d ===
         {
@@ -743,7 +737,7 @@ impl plonk::Circuit<pallas::Base> for Circuit {
         }
 
         // === Value commitment: cv ===
-        if matches!(scheme, ValueCommitmentScheme::Native) {
+        if scheme == ValueCommitmentScheme::Native {
             let magnitude = assign_free_advice(
                 layouter.namespace(|| "cv magnitude"),
                 config.advices[9],
@@ -776,7 +770,7 @@ impl plonk::Circuit<pallas::Base> for Circuit {
         }
 
         // === Value commitment: SHA-256 ===
-        if matches!(scheme, ValueCommitmentScheme::Sha256) {
+        if scheme == ValueCommitmentScheme::Sha256 {
             // Load the Table16 lookup table, but only if we are actually using SHA-256.
             sha256::Table16Chip::load(config.sha256_config.clone(), &mut layouter)?;
             let sha256_chip = config.sha256_chip();
@@ -1051,23 +1045,13 @@ fn decompose_for_compare(
     ),
     plonk::Error,
 > {
-    let msb_v = x
-        .value()
-        .map(|x| pallas::Base::from(decompose_u128_parts(x).0));
-    let mid_v = x
-        .value()
-        .map(|x| pallas::Base::from_u128(decompose_u128_parts(x).1));
-    let low_v = x
-        .value()
-        .map(|x| pallas::Base::from_u128(decompose_u128_parts(x).2));
-    let d_v = x.value().map(|x| {
-        let (msb, _mid, low) = decompose_u128_parts(x);
-        let d = if msb == 1 {
-            (T_P - 1).wrapping_sub(low)
-        } else {
-            0u128
-        };
-        pallas::Base::from_u128(d)
+    let parts = x.value().map(decompose_u128_parts);
+
+    let msb_v = parts.map(|(msb, _, _)| pallas::Base::from(msb));
+    let mid_v = parts.map(|(_, mid, _)| pallas::Base::from_u128(mid));
+    let low_v = parts.map(|(_, _, low)| pallas::Base::from_u128(low));
+    let d_v = parts.map(|(msb, _, low)| {
+        pallas::Base::from_u128(if msb { (T_P - 1).wrapping_sub(low) } else { 0 })
     });
 
     let (msb, mid, low, d) = layouter.assign_region(
@@ -1091,20 +1075,16 @@ fn decompose_for_compare(
     let lookup = config.sinsemilla_chip_1().config().lookup_config();
 
     // mid: 13 words of 10 bits (130) strict, then constrain top word to 6 bits.
-    {
-        let zs = lookup.copy_check(layouter.namespace(|| "mid rc"), mid.clone(), 13, true)?;
-        lookup.copy_short_check(layouter.namespace(|| "mid top6"), zs[12].clone(), 6)?;
-    }
+    let zs = lookup.copy_check(layouter.namespace(|| "mid rc"), mid.clone(), 13, true)?;
+    lookup.copy_short_check(layouter.namespace(|| "mid top6"), zs[12].clone(), 6)?;
+
     // low: 13 words strict, then constrain top word to 8 bits.
-    {
-        let zs = lookup.copy_check(layouter.namespace(|| "low rc"), low.clone(), 13, true)?;
-        lookup.copy_short_check(layouter.namespace(|| "low top8"), zs[12].clone(), 8)?;
-    }
+    let zs = lookup.copy_check(layouter.namespace(|| "low rc"), low.clone(), 13, true)?;
+    lookup.copy_short_check(layouter.namespace(|| "low top8"), zs[12].clone(), 8)?;
+
     // d: 13 words strict, then constrain top word to 8 bits.
-    {
-        let zs = lookup.copy_check(layouter.namespace(|| "d rc"), d.clone(), 13, true)?;
-        lookup.copy_short_check(layouter.namespace(|| "d top8"), zs[12].clone(), 8)?;
-    }
+    let zs = lookup.copy_check(layouter.namespace(|| "d rc"), d.clone(), 13, true)?;
+    lookup.copy_short_check(layouter.namespace(|| "d top8"), zs[12].clone(), 8)?;
 
     Ok((msb, mid, low))
 }
@@ -1114,8 +1094,9 @@ fn lt_nbits(
     layouter: &mut impl Layouter<pallas::Base>,
     a: halo2_proofs::circuit::AssignedCell<pallas::Base, pallas::Base>,
     b: halo2_proofs::circuit::AssignedCell<pallas::Base, pallas::Base>,
-    n: u32,
+    n: u8,
 ) -> Result<halo2_proofs::circuit::AssignedCell<pallas::Base, pallas::Base>, plonk::Error> {
+    debug_assert!(n <= 128);
     let two_pow_v = Value::known(match n {
         128 => two_pow_128(),
         0..=127 => pallas::Base::from_u128(1u128 << n),

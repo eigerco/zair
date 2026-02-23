@@ -7,6 +7,11 @@ use pasta_curves::{pallas, vesta};
 use crate::error::ClaimProofError;
 use crate::types::ValueCommitmentScheme;
 
+/// Number of public instance scalars for the Native value commitment scheme.
+const NATIVE_INSTANCE_COUNT: usize = 7;
+/// Number of public instance scalars for the SHA-256 value commitment scheme.
+const SHA256_INSTANCE_COUNT: usize = 13;
+
 pub(crate) fn base_from_repr(bytes: [u8; 32]) -> Result<pallas::Base, ClaimProofError> {
     Option::<pallas::Base>::from(pallas::Base::from_repr(bytes))
         .ok_or(ClaimProofError::NonCanonicalBase)
@@ -21,11 +26,9 @@ pub(crate) fn target_id_slice(
     target_id: &[u8; 32],
     target_id_len: u8,
 ) -> Result<&[u8], ClaimProofError> {
-    let len = usize::from(target_id_len);
-    if len > 32 {
-        return Err(ClaimProofError::InvalidTargetIdLength);
-    }
-    let target = &target_id[..len];
+    let target = target_id
+        .get(..usize::from(target_id_len))
+        .ok_or(ClaimProofError::InvalidTargetIdLength)?;
     std::str::from_utf8(target).map_err(|_| ClaimProofError::InvalidTargetIdUtf8)?;
     Ok(target)
 }
@@ -60,7 +63,10 @@ pub(crate) fn to_instance(
     nullifier_gap_root: [u8; 32],
     scheme: ValueCommitmentScheme,
 ) -> Result<[Vec<vesta::Scalar>; 1], ClaimProofError> {
-    let mut instance: Vec<vesta::Scalar> = Vec::new();
+    let mut instance: Vec<vesta::Scalar> = Vec::with_capacity(match scheme {
+        ValueCommitmentScheme::Native => NATIVE_INSTANCE_COUNT,
+        ValueCommitmentScheme::Sha256 => SHA256_INSTANCE_COUNT,
+    });
 
     let rk_point = Option::<pallas::Point>::from(pallas::Point::from_bytes(&rk_bytes))
         .ok_or(ClaimProofError::InvalidPoint)?;

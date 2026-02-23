@@ -5,11 +5,9 @@ use zair_core::base::SanitiseNullifiers;
 use super::dense::DenseGapTree;
 use crate::core::{MerklePathError, should_report_progress};
 use crate::pool::orchard::{
-    canonicalize_orchard_chain_nullifiers, orchard_gap_bounds, orchard_max_nullifier,
-    orchard_node_from_bytes,
+    ORCHARD_LEAF_HASH_LEVEL, canonicalize_orchard_chain_nullifiers, orchard_gap_bounds,
+    orchard_max_nullifier, orchard_node_from_bytes,
 };
-
-const ORCHARD_LEAF_HASH_LEVEL: u8 = 62;
 
 #[derive(Debug, Clone)]
 pub struct OrchardGapTree(DenseGapTree);
@@ -32,7 +30,7 @@ impl OrchardGapTree {
         let mut last_pct = 0_usize;
         on_progress(0, leaf_count);
         for gap_idx in 0..leaf_count {
-            let gap = orchard_gap_bounds(&chain, gap_idx, min_node, max_node);
+            let gap = orchard_gap_bounds(&chain, gap_idx, min_node, max_node)?;
             leaves.push(MerkleHashOrchard::combine(
                 ORCHARD_LEAF_HASH_LEVEL.into(),
                 &gap.left_node,

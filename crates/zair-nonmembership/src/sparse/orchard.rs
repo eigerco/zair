@@ -15,30 +15,17 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
 use bridgetree::BridgeTree;
-use ff::PrimeField as _;
 use incrementalmerkletree::{Hashable, Position};
 use orchard::tree::MerkleHashOrchard;
-use pasta_curves::pallas;
 use zair_core::base::Nullifier;
 
-use crate::core::{MerklePathError, TreePosition};
+use crate::core::{MerklePathError, TreePosition, validate_leaf_count};
 use crate::node::NON_MEMBERSHIP_TREE_DEPTH;
-
-const ORCHARD_LEAF_HASH_LEVEL: u8 = 62;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct CanonicalOrchardNullifier {
-    bytes: Nullifier,
-    node: MerkleHashOrchard,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Gap {
-    left_nf: Nullifier,
-    left_node: MerkleHashOrchard,
-    right_nf: Nullifier,
-    right_node: MerkleHashOrchard,
-}
+use crate::pool::orchard::{
+    CanonicalOrchardNullifier, ORCHARD_LEAF_HASH_LEVEL, canonicalize_orchard_chain_nullifiers,
+    canonicalize_orchard_user_nullifiers, orchard_cmp, orchard_gap_bounds, orchard_max_nullifier,
+    orchard_node_from_bytes,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 /// A non-membership tree node for the Orchard gap tree.
@@ -95,25 +82,16 @@ impl OrchardNonMembershipTree {
         let leaves_iter = leaves.into_iter();
         let len = leaves_iter.len();
 
-        if len >= 2_usize.pow(u32::from(NON_MEMBERSHIP_TREE_DEPTH)) {
-            return Err(MerklePathError::LeavesOverflow(len));
-        }
-        if len == 0_usize {
-            return Err(MerklePathError::Unexpected(
-                "0 leaves provided for a non-membership tree. This is not a valid case.",
-            ));
-        }
+        validate_leaf_count(len)?;
 
         let mut tree: BridgeTree<OrchardNonMembershipNode, (), { NON_MEMBERSHIP_TREE_DEPTH }> =
             BridgeTree::new(1);
-        let mut leaf_count = 0_usize;
         for leaf in leaves_iter {
             if !tree.append(leaf?) {
                 return Err(MerklePathError::Unexpected(
                     "Failed to append leaf to the Merkle tree",
                 ));
             }
-            leaf_count = leaf_count.saturating_add(1);
         }
 
         tree.checkpoint(());
@@ -124,7 +102,7 @@ impl OrchardNonMembershipTree {
         Ok(Self {
             inner: tree,
             cached_root,
-            leaf_count,
+            leaf_count: len,
         })
     }
 
@@ -188,20 +166,18 @@ impl OrchardNonMembershipTree {
         let min_node = orchard_node_from_bytes(*Nullifier::MIN.as_ref()).ok_or(
             MerklePathError::Unexpected("invalid Orchard min nullifier encoding"),
         )?;
-        let max_nf = orchard_max_nullifier();
-        let max_node = orchard_node_from_bytes(*max_nf.as_ref()).ok_or(
+        let max_node = orchard_node_from_bytes(*orchard_max_nullifier().as_ref()).ok_or(
             MerklePathError::Unexpected("invalid Orchard max nullifier encoding"),
         )?;
 
         let mut tree: BridgeTree<OrchardNonMembershipNode, (), { NON_MEMBERSHIP_TREE_DEPTH }> =
             BridgeTree::new(1);
-        let mut leaf_count = 0usize;
-        let mut user_gap_mapping = Vec::new();
+        let mut user_gap_mapping = Vec::with_capacity(user.len());
         let mut user_idx = 0usize;
 
         let num_gaps = chain.len().saturating_add(1);
         for gap_idx in 0..num_gaps {
-            let gap = orchard_gap_bounds(&chain, gap_idx, min_node, max_nf, max_node);
+            let gap = orchard_gap_bounds(&chain, gap_idx, min_node, max_node)?;
             let leaf = OrchardNonMembershipNode::leaf_from_nodes(gap.left_node, gap.right_node);
             tree.append(leaf);
 
@@ -231,8 +207,7 @@ impl OrchardNonMembershipTree {
                 tree.mark();
             }
 
-            leaf_count = leaf_count.saturating_add(1);
-            on_progress(leaf_count, num_gaps);
+            on_progress(gap_idx.saturating_add(1), num_gaps);
         }
 
         tree.checkpoint(());
@@ -244,7 +219,7 @@ impl OrchardNonMembershipTree {
             Self {
                 inner: tree,
                 cached_root,
-                leaf_count,
+                leaf_count: num_gaps,
             },
             user_gap_mapping,
         ))
@@ -285,109 +260,6 @@ impl OrchardNonMembershipTree {
     }
 }
 
-fn orchard_node_from_bytes(bytes: [u8; 32]) -> Option<MerkleHashOrchard> {
-    Option::<MerkleHashOrchard>::from(MerkleHashOrchard::from_bytes(&bytes))
-}
-
-fn canonicalize_orchard_chain_nullifiers(
-    set: &'static str,
-    nullifiers: &[Nullifier],
-) -> Result<Vec<CanonicalOrchardNullifier>, MerklePathError> {
-    let mut canonical = Vec::with_capacity(nullifiers.len());
-    for (index, nullifier) in nullifiers.iter().enumerate() {
-        let bytes = *nullifier.as_ref();
-        let node = orchard_node_from_bytes(bytes)
-            .ok_or(MerklePathError::NonCanonicalOrchardNullifier { set, index })?;
-        canonical.push(CanonicalOrchardNullifier {
-            bytes: *nullifier,
-            node,
-        });
-    }
-
-    canonical.sort_unstable_by(|lhs, rhs| orchard_cmp(&lhs.bytes, &rhs.bytes));
-    canonical.dedup_by(|lhs, rhs| lhs.bytes == rhs.bytes);
-    Ok(canonical)
-}
-
-fn canonicalize_orchard_user_nullifiers(
-    set: &'static str,
-    nullifiers: &[Nullifier],
-) -> Result<Vec<Nullifier>, MerklePathError> {
-    let mut canonical = Vec::with_capacity(nullifiers.len());
-    for (index, nullifier) in nullifiers.iter().enumerate() {
-        let bytes = *nullifier.as_ref();
-        orchard_node_from_bytes(bytes)
-            .ok_or(MerklePathError::NonCanonicalOrchardNullifier { set, index })?;
-        canonical.push(*nullifier);
-    }
-
-    canonical.sort_unstable_by(orchard_cmp);
-    canonical.dedup();
-    Ok(canonical)
-}
-
-fn orchard_cmp(lhs: &Nullifier, rhs: &Nullifier) -> Ordering {
-    cmp_pallas_repr_le(lhs.as_ref(), rhs.as_ref())
-}
-
-fn cmp_pallas_repr_le(lhs: &[u8; 32], rhs: &[u8; 32]) -> Ordering {
-    for index in (0..32).rev() {
-        let ordering = lhs[index].cmp(&rhs[index]);
-        if ordering != Ordering::Equal {
-            return ordering;
-        }
-    }
-    Ordering::Equal
-}
-
-fn orchard_max_nullifier() -> Nullifier {
-    let max = pallas::Base::from(0u64) - pallas::Base::from(1u64);
-    Nullifier::from(max.to_repr())
-}
-
-fn orchard_gap_bounds(
-    nullifiers: &[CanonicalOrchardNullifier],
-    gap_idx: usize,
-    min_node: MerkleHashOrchard,
-    max_nf: Nullifier,
-    max_node: MerkleHashOrchard,
-) -> Gap {
-    let len = nullifiers.len();
-
-    if len == 0 {
-        return Gap {
-            left_nf: Nullifier::MIN,
-            left_node: min_node,
-            right_nf: max_nf,
-            right_node: max_node,
-        };
-    }
-
-    match gap_idx {
-        0 => Gap {
-            left_nf: Nullifier::MIN,
-            left_node: min_node,
-            right_nf: nullifiers[0].bytes,
-            right_node: nullifiers[0].node,
-        },
-        i if i == len => Gap {
-            left_nf: nullifiers[i - 1].bytes,
-            left_node: nullifiers[i - 1].node,
-            right_nf: max_nf,
-            right_node: max_node,
-        },
-        i if i > len => {
-            panic!("gap_idx {gap_idx} out of bounds for {len} nullifiers")
-        }
-        i => Gap {
-            left_nf: nullifiers[i - 1].bytes,
-            left_node: nullifiers[i - 1].node,
-            right_nf: nullifiers[i].bytes,
-            right_node: nullifiers[i].node,
-        },
-    }
-}
-
 #[allow(
     dead_code,
     reason = "Used by test-only leaf-construction path retained for unit tests"
@@ -395,7 +267,6 @@ fn orchard_gap_bounds(
 struct OrchardNullifierLeafIterator<'a> {
     nullifiers: &'a [CanonicalOrchardNullifier],
     min_node: MerkleHashOrchard,
-    max_nf: Nullifier,
     max_node: MerkleHashOrchard,
     index: usize,
     total: usize,
@@ -410,14 +281,12 @@ impl<'a> OrchardNullifierLeafIterator<'a> {
         let min_node = orchard_node_from_bytes(*Nullifier::MIN.as_ref()).ok_or(
             MerklePathError::Unexpected("invalid Orchard min nullifier encoding"),
         )?;
-        let max_nf = orchard_max_nullifier();
-        let max_node = orchard_node_from_bytes(*max_nf.as_ref()).ok_or(
+        let max_node = orchard_node_from_bytes(*orchard_max_nullifier().as_ref()).ok_or(
             MerklePathError::Unexpected("invalid Orchard max nullifier encoding"),
         )?;
         Ok(Self {
             nullifiers,
             min_node,
-            max_nf,
             max_node,
             index: 0,
             total: nullifiers.len().saturating_add(1),
@@ -433,19 +302,10 @@ impl Iterator for OrchardNullifierLeafIterator<'_> {
             return None;
         }
 
-        let gap = orchard_gap_bounds(
-            self.nullifiers,
-            self.index,
-            self.min_node,
-            self.max_nf,
-            self.max_node,
-        );
+        let gap = orchard_gap_bounds(self.nullifiers, self.index, self.min_node, self.max_node);
 
         self.index = self.index.saturating_add(1);
-        Some(Ok(OrchardNonMembershipNode::leaf_from_nodes(
-            gap.left_node,
-            gap.right_node,
-        )))
+        Some(gap.map(|g| OrchardNonMembershipNode::leaf_from_nodes(g.left_node, g.right_node)))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -458,6 +318,9 @@ impl ExactSizeIterator for OrchardNullifierLeafIterator<'_> {}
 
 #[cfg(test)]
 mod tests {
+    use ff::PrimeField as _;
+    use pasta_curves::pallas;
+
     use super::*;
 
     fn orchard_nf(v: u64) -> Nullifier {

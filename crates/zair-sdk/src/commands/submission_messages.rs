@@ -118,9 +118,14 @@ pub async fn resolve_message_hashes(
         )
     })?;
 
+    let (sapling, orchard) = tokio::try_join!(
+        load_assignment_hashes(payload.sapling, "Sapling"),
+        load_assignment_hashes(payload.orchard, "Orchard"),
+    )?;
+
     Ok(ResolvedMessageHashes {
         shared,
-        sapling: load_assignment_hashes(payload.sapling, "Sapling").await?,
-        orchard: load_assignment_hashes(payload.orchard, "Orchard").await?,
+        sapling,
+        orchard,
     })
 }

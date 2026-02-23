@@ -1,23 +1,11 @@
 use incrementalmerkletree::Level;
 
-use crate::core::MerklePathError;
+use crate::core::{MerklePathError, validate_leaf_count};
 use crate::node::NON_MEMBERSHIP_TREE_DEPTH;
 
 const SERIALIZED_LEAF_COUNT_BYTES: usize = 8;
 const SERIALIZED_NODE_BYTES: usize = 32;
 const TREE_LEVEL_COUNT: usize = 33;
-
-fn validate_leaf_count(leaf_count: usize) -> Result<(), MerklePathError> {
-    if leaf_count == 0 {
-        return Err(MerklePathError::Unexpected(
-            "gap-tree leaf count must be greater than zero",
-        ));
-    }
-    if leaf_count >= (1_usize << u32::from(NON_MEMBERSHIP_TREE_DEPTH)) {
-        return Err(MerklePathError::LeavesOverflow(leaf_count));
-    }
-    Ok(())
-}
 
 fn level_layout(
     leaf_count: usize,
@@ -88,29 +76,21 @@ impl DenseGapTree {
     }
 
     pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, MerklePathError> {
-        if bytes.len() < SERIALIZED_LEAF_COUNT_BYTES {
-            return Err(MerklePathError::Unexpected("gap-tree file is too short"));
-        }
+        let (&header, payload) = bytes
+            .split_first_chunk::<SERIALIZED_LEAF_COUNT_BYTES>()
+            .ok_or(MerklePathError::Unexpected("gap-tree file is too short"))?;
 
-        let leaf_count_bytes: [u8; SERIALIZED_LEAF_COUNT_BYTES] = bytes
-            .get(..SERIALIZED_LEAF_COUNT_BYTES)
-            .ok_or(MerklePathError::Unexpected("gap-tree file is too short"))?
-            .try_into()
-            .map_err(|_| MerklePathError::Unexpected("invalid gap-tree header"))?;
-        let leaf_count_u64 = u64::from_le_bytes(leaf_count_bytes);
+        let leaf_count_u64 = u64::from_le_bytes(header);
         let leaf_count = usize::try_from(leaf_count_u64)
             .map_err(|_| MerklePathError::Unexpected("leaf count does not fit into usize"))?;
 
         validate_leaf_count(leaf_count)?;
         let (level_widths, level_offsets, total_nodes) = level_layout(leaf_count);
-        let expected_len = SERIALIZED_LEAF_COUNT_BYTES + total_nodes * SERIALIZED_NODE_BYTES;
-        if bytes.len() != expected_len {
+
+        if payload.len() != total_nodes * SERIALIZED_NODE_BYTES {
             return Err(MerklePathError::Unexpected("gap-tree file length mismatch"));
         }
 
-        let payload = bytes
-            .get(SERIALIZED_LEAF_COUNT_BYTES..)
-            .ok_or(MerklePathError::Unexpected("gap-tree file missing payload"))?;
         let mut nodes = Vec::with_capacity(total_nodes);
         for chunk in payload.chunks_exact(SERIALIZED_NODE_BYTES) {
             let mut node = [0_u8; SERIALIZED_NODE_BYTES];
@@ -172,11 +152,7 @@ impl DenseGapTree {
         for level in 0..NON_MEMBERSHIP_TREE_DEPTH {
             let level_idx = usize::from(level);
             let width = self.level_widths[level_idx];
-            let sibling = if index.is_multiple_of(2) {
-                index.saturating_add(1)
-            } else {
-                index.saturating_sub(1)
-            };
+            let sibling = index ^ 1;
             let sibling_node = if sibling < width {
                 self.node_at(level_idx, sibling)
             } else {

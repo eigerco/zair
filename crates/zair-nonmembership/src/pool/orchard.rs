@@ -14,6 +14,9 @@ use zair_core::base::{Nullifier, SanitiseNullifiers};
 
 use crate::core::{MerklePathError, TreePosition};
 
+/// Orchard leaf hash level for gap tree leaves (`MerkleCRH^Orchard(level=62, left, right)`).
+pub const ORCHARD_LEAF_HASH_LEVEL: u8 = 62;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CanonicalOrchardNullifier {
     pub bytes: Nullifier,
@@ -37,7 +40,7 @@ pub fn map_orchard_user_positions(
     let max = orchard_max_nullifier();
 
     let chain_bytes: Vec<Nullifier> = chain.into_iter().map(|item| item.bytes).collect();
-    let mut mapping = Vec::new();
+    let mut mapping = Vec::with_capacity(user.len());
     for user_nf in user {
         if let Err(gap_idx) =
             chain_bytes.binary_search_by(|candidate| orchard_cmp(candidate, &user_nf))
@@ -116,44 +119,33 @@ pub fn orchard_max_nullifier() -> Nullifier {
     Nullifier::from(max.to_repr())
 }
 
-#[must_use]
+/// # Errors
+/// Returns an error if `gap_idx` is out of bounds for the given chain.
 pub fn orchard_gap_bounds(
     chain: &[CanonicalOrchardNullifier],
     gap_idx: usize,
     min_node: MerkleHashOrchard,
     max_node: MerkleHashOrchard,
-) -> OrchardGap {
-    if chain.is_empty() {
-        return OrchardGap {
-            left_nf: Nullifier::MIN,
-            left_node: min_node,
-            right_nf: orchard_max_nullifier(),
-            right_node: max_node,
-        };
+) -> Result<OrchardGap, MerklePathError> {
+    if gap_idx > chain.len() {
+        return Err(MerklePathError::Unexpected("gap_idx out of bounds"));
     }
 
-    match gap_idx {
-        0 => OrchardGap {
-            left_nf: Nullifier::MIN,
-            left_node: min_node,
-            right_nf: chain[0].bytes,
-            right_node: chain[0].node,
-        },
-        i if i == chain.len() => OrchardGap {
-            left_nf: chain[i - 1].bytes,
-            left_node: chain[i - 1].node,
-            right_nf: orchard_max_nullifier(),
-            right_node: max_node,
-        },
-        i if i < chain.len() => OrchardGap {
-            left_nf: chain[i - 1].bytes,
-            left_node: chain[i - 1].node,
-            right_nf: chain[i].bytes,
-            right_node: chain[i].node,
-        },
-        _ => panic!(
-            "gap_idx {gap_idx} out of bounds for {} nullifiers",
-            chain.len()
-        ),
-    }
+    let (left_nf, left_node) = gap_idx
+        .checked_sub(1)
+        .map_or((Nullifier::MIN, min_node), |i| {
+            (chain[i].bytes, chain[i].node)
+        });
+
+    let (right_nf, right_node) = chain.get(gap_idx).map_or_else(
+        || (orchard_max_nullifier(), max_node),
+        |c| (c.bytes, c.node),
+    );
+
+    Ok(OrchardGap {
+        left_nf,
+        left_node,
+        right_nf,
+        right_node,
+    })
 }

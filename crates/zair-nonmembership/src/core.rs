@@ -70,6 +70,22 @@ pub enum MerklePathError {
     Unexpected(&'static str),
 }
 
+/// Validate that a leaf count is valid for a non-membership tree.
+///
+/// # Errors
+/// Returns an error if the count is zero or exceeds the tree capacity.
+pub fn validate_leaf_count(leaf_count: usize) -> Result<(), MerklePathError> {
+    if leaf_count == 0 {
+        return Err(MerklePathError::Unexpected(
+            "gap-tree leaf count must be greater than zero",
+        ));
+    }
+    if leaf_count >= (1_usize << u32::from(crate::node::NON_MEMBERSHIP_TREE_DEPTH)) {
+        return Err(MerklePathError::LeavesOverflow(leaf_count));
+    }
+    Ok(())
+}
+
 pub const fn should_report_progress(current: usize, total: usize, last_pct: &mut usize) -> bool {
     if total == 0 {
         return false;

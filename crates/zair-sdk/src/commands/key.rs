@@ -45,11 +45,15 @@ async fn read_secret_stdin() -> eyre::Result<SecretString> {
     tokio::task::spawn_blocking(|| -> eyre::Result<SecretString> {
         use std::io::Read as _;
 
+        use zeroize::Zeroize as _;
+
         let mut buf = String::new();
         std::io::stdin()
             .read_to_string(&mut buf)
             .context("Failed to read stdin")?;
-        Ok(SecretString::new(buf.trim().to_owned().into_boxed_str()))
+        let secret = SecretString::new(buf.trim().to_owned().into_boxed_str());
+        buf.zeroize();
+        Ok(secret)
     })
     .await?
 }
@@ -93,10 +97,14 @@ pub async fn key_derive_seed(
     mnemonic_source: MnemonicSource,
     no_passphrase: bool,
 ) -> eyre::Result<()> {
+    use zeroize::Zeroize as _;
+
     info!(file = ?output, "Deriving seed...");
     let seed = derive_seed_from_mnemonic(mnemonic_source, no_passphrase).await?;
-    let hex = format!("{}\n", hex::encode(seed.expose_secret()));
+
+    let mut hex = format!("{}\n", hex::encode(seed.expose_secret()));
     write_sensitive_output(&output, &hex).await?;
+    hex.zeroize();
     info!(file = ?output, "Seed written");
     Ok(())
 }

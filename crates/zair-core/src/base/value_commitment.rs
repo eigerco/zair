@@ -20,11 +20,7 @@ pub fn cv_sha256_preimage(value: u64, rcv_sha256: [u8; 32]) -> [u8; 44] {
 /// Compute `cv_sha256 = SHA256(b"Zair" || LE64(value) || rcv_sha256)`.
 #[must_use]
 pub fn cv_sha256(value: u64, rcv_sha256: [u8; 32]) -> [u8; 32] {
-    let preimage = cv_sha256_preimage(value, rcv_sha256);
-    let digest = Sha256::digest(preimage);
-    let mut out = [0_u8; 32];
-    out.copy_from_slice(&digest);
-    out
+    Sha256::digest(cv_sha256_preimage(value, rcv_sha256)).into()
 }
 
 #[cfg(test)]

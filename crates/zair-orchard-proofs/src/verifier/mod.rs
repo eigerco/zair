@@ -26,8 +26,7 @@ pub fn verify_claim_proof_output(
     std::str::from_utf8(target_id).map_err(|_| ClaimProofError::InvalidTargetIdUtf8)?;
     let mut target_id_arr = [0_u8; 32];
     target_id_arr[..target_id.len()].copy_from_slice(target_id);
-    let target_id_len =
-        u8::try_from(target_id.len()).map_err(|_| ClaimProofError::InvalidTargetIdLength)?;
+    let target_id_len = target_id.len() as u8;
 
     let [col0] = to_instance(
         note_commitment_root,
