@@ -19,22 +19,6 @@ These proofs are constructed using Merkle trees built from the set of known null
 - Rust 1.91+ (uses Rust 2024 edition)
 - Protobuf compiler (`protoc`) - required for building the lightwalletd gRPC bindings
 
-After cloning the repo:
-
-```bash
-git clone --branch v0.11.0 --single-branch https://github.com/zcash/orchard.git .patched-orchard
-git -C .patched-orchard apply "../nix/airdrop-orchard-nullifier.patch"
-
-git clone --branch v0.5.0 --single-branch https://github.com/zcash/sapling-crypto.git .patched-sapling-crypto
-git -C .patched-sapling-crypto apply "../nix/airdrop-sapling-nullifier.patch"
-
-curl -sL https://static.crates.io/crates/halo2_gadgets/halo2_gadgets-0.3.1.crate | tar xz
-mv halo2_gadgets-0.3.1 .patched-halo2-gadgets
-patch -p1 -d .patched-halo2-gadgets < nix/airdrop-halo2-gadgets-sha256.patch
-```
-
-> **Note**: The patches expose private internals needed by the airdrop circuits - hiding nullifier derivation in sapling-crypto and orchard, circuit gadget visibility and note commitment helpers in orchard, and SHA-256 digest cell access in halo2_gadgets.
-
 ### With nix
 
 This workspace uses Nix to enhance the development experience.
