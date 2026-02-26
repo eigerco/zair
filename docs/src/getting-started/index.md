@@ -1,47 +1,52 @@
 # Getting Started
 
-This section covers building `zair` and running a quick sanity check. Afterwards, you can follow the step-by-step guide on how to configure, prove and verify an airdrop claim in the [CLI Reference](../cli/index.md).
+This section covers setting up the repository, building `zair`, and running a quick sanity check. Afterwards, follow the step-by-step guide in the [CLI Reference](../cli/index.md).
 
-## Build options
+## Setup and Building
 
-### With Nix
+### With Nix (recommended)
 
-Use the repo’s Nix flake to enter a development environment:
+The repo includes a Nix flake that provides all dependencies (Rust, `protoc`, patched crates):
 
 ```bash
 nix develop
-```
-
-Common commands:
-
-```bash
 cargo build --release
 ```
 
 ### Without Nix
 
-Prerequisites:
+#### Prerequisites
 
-- Rust 1.91+ (uses Rust 2024 edition)
-- Protobuf compiler `protoc` (for lightwalletd gRPC bindings)
+- Rust 1.91+ (2024 edition)
+- Protobuf (`protoc`) for lightwalletd gRPC bindings
 
-This workspace uses patched Zcash dependencies.
+#### Patching dependencies
 
-- `.patched-sapling-crypto`
-- `.patched-orchard`
-- `.patched-halo2-gadgets`
+The airdrop circuits require patched versions of upstream Zcash crates. After cloning, run:
 
-See `README.md` for detailed steps on cloning and patching.
+```bash
+git clone --branch v0.11.0 --single-branch https://github.com/zcash/orchard.git .patched-orchard
+git -C .patched-orchard apply "../nix/airdrop-orchard-nullifier.patch"
 
-## Building and Sanity check
+git clone --branch v0.5.0 --single-branch https://github.com/zcash/sapling-crypto.git .patched-sapling-crypto
+git -C .patched-sapling-crypto apply "../nix/airdrop-sapling-nullifier.patch"
 
-Build the binary using
+curl -sL https://static.crates.io/crates/halo2_gadgets/halo2_gadgets-0.3.1.crate | tar xz
+mv halo2_gadgets-0.3.1 .patched-halo2-gadgets
+patch -p1 -d .patched-halo2-gadgets < nix/airdrop-halo2-gadgets-sha256.patch
+```
+
+The patches mainly expose private internals needed by the airdrop circuits.
+
+Then build:
 
 ```bash
 cargo build --release
 ```
 
-You should be able to verify the CLI is available:
+## Sanity check
+
+Verify the CLI is available:
 
 ```bash
 ./target/release/zair --help
