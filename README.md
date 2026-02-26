@@ -1,86 +1,94 @@
-# zcash-namada-airdrop
+<p align="center">
+  <img src="docs/logo.png" alt="zair" width="400">
+</p>
 
-> **⚠️ Work in Progress**: This project is under active development and not yet complete.
+# Zair
 
-A toolkit for generating non-membership proofs for Zcash shielded assets as part of the Namada airdrop. This allows Zcash users with unspent shielded notes (Sapling or Orchard) to prove they held funds at a specific snapshot height without revealing their nullifiers.
+Zair offers privacy-preserving tools for Zcash airdrops by allowing users to prove they own eligible notes on Zcash while preserving the privacy of the notes owned and the amounts claimed.
 
-## What are Non-Membership Proofs?
+**[Link to Documentation](https://eigerco.github.io/zair)**
 
-A non-membership proof is a cryptographic proof that demonstrates a specific element (such as a nullifier) is not present in a given set, without revealing any additional information about the element itself. In the context of Zcash and this toolkit, non-membership proofs allow users to prove that their shielded note's nullifier does not appear in a snapshot of spent nullifiers. This enables users to show they held unspent funds at a particular block height, which is essential for privacy-preserving airdrops.
+**This project has not been audited.**
 
-These proofs are constructed using Merkle trees built from the set of known nullifiers at the snapshot height. By providing a non-membership proof, a user can convince a verifier that their note was not spent (i.e., its nullifier is not in the tree).
+## How it works
 
-## Setup Instructions
+An organizer publishes a snapshot of the Zcash chain at a given height. Claimants scan for their eligible notes, then generate a ZK proof per note that demonstrates note ownership and unspentness without revealing the Zcash nullifier. Each proof instead exposes a domain-separated _airdrop nullifier_ for double-claim prevention and is signed with a spend-authorizing key bound to a target-chain message. Verifiers then check the proofs against the snapshot and de-duplicate by airdrop nullifier.
 
-### Without nix
-
-#### Prerequisites
-
-- Rust 1.91+ (uses Rust 2024 edition)
-- Protobuf compiler (`protoc`) - required for building the lightwalletd gRPC bindings
-
-After cloning the repo:
-
-```bash
-git clone --branch v0.11.0 --single-branch https://github.com/zcash/orchard.git .patched-orchard
-git -C .patched-orchard apply "../nix/airdrop-orchard-nullifier.patch"
-
-git clone --branch v0.5.0 --single-branch https://github.com/zcash/sapling-crypto.git .patched-sapling-crypto
-git -C .patched-sapling-crypto apply "../nix/airdrop-sapling-nullifier.patch"
-
-curl -sL https://static.crates.io/crates/halo2_gadgets/halo2_gadgets-0.3.1.crate | tar xz
-mv halo2_gadgets-0.3.1 .patched-halo2-gadgets
-patch -p1 -d .patched-halo2-gadgets < nix/airdrop-halo2-gadgets-sha256.patch
-```
-
-> **Note**: The patches expose private internals needed by the airdrop circuits - hiding nullifier derivation in sapling-crypto and orchard, circuit gadget visibility and note commitment helpers in orchard, and SHA-256 digest cell access in halo2_gadgets.
-
-### With nix
-
-This workspace uses Nix to enhance the development experience.
-
-- **`nix develop`** - enter the development environment
-- **`nix fmt`** - format the workspace
-- **`nix flake check`** - run checks, like linters and formatters. At the moment `cargo clippy` is not running with the other linters.
-
-The workspace also uses `pre-commit` checks. These can be removed if they prove problematic.
-
-## Available Tools
-
-### zair
-
-- **Description**: CLI tool for building Zcash airdrop snapshots, generating claim inputs/proofs, and verifying submissions.
-  - `zair key derive-seed` / `zair key derive-ufvk`: derive `seed.txt` or `ufvk.txt` from a wallet mnemonic.
-  - `zair config build`: build `config.json`, snapshot and gap-tree files.
-  - `zair claim prepare`: scan chain for your notes and write `claim-prepared.json` (UFVK is provided via a file).
-  - `zair claim prove` / `zair claim sign` / `zair claim run`: generate proofs and signed submissions.
-  - `zair verify proof` / `zair verify signature` / `zair verify run`: verify proofs and signatures.
-  - `zair setup sapling` / `zair setup orchard`: generate proving/verification parameters (organizers/developers).
-  - Run with `--help` to check the usage.
+See the [Introduction](https://eigerco.github.io/zair/introduction.html) for more details.
 
 ## Crates
 
-- **zair-core**: Shared configuration and claim-input formats (JSON) used across the workspace.
-- **zair-sdk**: Library/workflow crate used by `zair` (snapshot building, claim generation, proof helpers).
-- **zair-nonmembership**: Nullifier and non-membership Merkle tree primitives used by the airdrop tools.
-- **zair-scan**: lightwalletd integration + chain scanning used by the CLI (fetching nullifiers, scanning for notes, etc).
-- **zair-sapling-proofs**: Sapling claim proving + verification API. Verification is available by default; proving is behind the `prove` feature (so verification-only consumers don't compile the circuit).
-- **zair-sapling-circuit**: The Sapling claim circuit implementation (heavy; used only for keygen/proving).
+| Crate | Description |
+| --- | --- |
+| `zair-cli` | Primary `zair` CLI binary tool |
+| `zair-sdk` | The SDK and entrypoint for `zair` airdrops, used by the CLI |
+| `zair-core` | Core crate with shared types, config and schemas |
+| `zair-nonmembership` | Non-membership Merkle-tree primitive |
+| `zair-scan` | Lightwalletd gRPC client and chain scanning |
+| `zair-sapling-proofs` | Sapling proving and verification |
+| `zair-sapling-circuit` | Sapling claim circuit (Bellman/Groth16) |
+| `zair-orchard-proofs` | Orchard proving and verification |
+| `zair-orchard-circuit` | Orchard claim circuit (Halo2) |
 
-## Usage
+## Getting started
 
-Assuming that the project is set up correctly.
-
-### Building the Project
-
-After completing the setup steps above, you can build the project. The project provides the `zair` binary:
+See [Getting Started](https://eigerco.github.io/zair/getting-started/index.html) for build instructions and setup. The quickest path is using Nix:
 
 ```bash
+nix develop
 cargo build --release
 ```
 
-This will produce the optimized `zair` executable in the `target/release` directory.
+## Usage
 
-### User Guide
+Below is a minimal example workflow. See the [CLI Reference](https://eigerco.github.io/zair/cli/index.html) for details or check `zair --help` for command options.
 
-For a complete walkthrough of the airdrop claim process, see the **[Usage Guide](docs/USAGE.md)**.
+### 1. Derive keys
+
+Extract the seed from your wallet mnemonic:
+
+```bash
+zair key derive-seed --mnemonic-file mnemonic.txt --no-passphrase
+```
+
+### 2. Generate parameters
+
+Generate the trusted Sapling setup (required once):
+
+```bash
+zair setup sapling
+```
+
+### 3. Build configuration
+
+Build the airdrop snapshot against a chain height:
+
+```bash
+zair config build --network testnet --height <SNAPSHOT_HEIGHT>
+```
+
+### 4. Claim
+
+Run the full claim pipeline (prepare, prove, sign) in one step:
+
+```bash
+zair claim run \
+  --config config.json \
+  --seed seed.txt \
+  --birthday <WALLET_BIRTHDAY> \
+  --message claim-message.bin
+```
+
+### 5. Verify
+
+Verify the submission (proofs and signatures):
+
+```bash
+zair verify run \
+  --config config.json \
+  --message claim-message.bin
+```
+
+## License
+
+Released under the MIT License.
