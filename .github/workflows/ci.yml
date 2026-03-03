@@ -85,7 +85,7 @@ jobs:
       - name: cargo build --release
         run: cargo build --release --locked
   msrv:
-    name: MSRV / 1.88.0
+    name: MSRV / 1.85.1
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -94,7 +94,7 @@ jobs:
       - name: Setup Rust build environment
         uses: ./.github/actions/setup-rust-build
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.85.1"
           shared-key: msrv
       - name: cargo check
         run: cargo check --locked --all-targets --all-features

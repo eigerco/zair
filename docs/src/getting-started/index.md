@@ -17,7 +17,7 @@ cargo build --release
 
 #### Prerequisites
 
-- Rust 1.91+ (2024 edition)
+- Rust 1.85.1+ (2024 edition)
 - Protobuf (`protoc`) for lightwalletd gRPC bindings
 
 Build with:
