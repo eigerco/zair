@@ -1,5 +1,5 @@
 [toolchain]
-channel = "stable"
+channel = "1.85.1"
 targets = []
 components = ["rust-src", "llvm-tools-preview"]
 

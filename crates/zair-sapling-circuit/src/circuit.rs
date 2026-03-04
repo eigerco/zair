@@ -693,7 +693,7 @@ mod tests {
             let auth_path = vec![
                 Some((
                     bls12_381::Scalar::random(&mut rng),
-                    !rng.next_u32().is_multiple_of(2_u32)
+                    !rng.next_u32() % 2 == 0
                 ));
                 tree_depth
             ];
@@ -711,7 +711,7 @@ mod tests {
                 .map(|_| {
                     Some((
                         bls12_381::Scalar::random(&mut rng),
-                        !rng.next_u32().is_multiple_of(2_u32),
+                        !rng.next_u32() % 2 == 0,
                     ))
                 })
                 .collect();

@@ -321,7 +321,7 @@ impl NonMembershipTree {
         let mut pos: u64 = position.into();
 
         for (level, sibling) in path.iter().enumerate() {
-            let (left, right) = if pos.is_multiple_of(2) {
+            let (left, right) = if pos % 2 == 0 {
                 (&current, sibling)
             } else {
                 (sibling, &current)
