@@ -7,6 +7,8 @@ use eyre::{Context as _, ensure};
 use serde::{Deserialize, Serialize};
 use zair_core::base::{Nullifier, hash_message};
 
+use crate::api::MessageHashes;
+
 /// One per-claim message-file assignment.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClaimMessageAssignment {
@@ -36,6 +38,19 @@ pub struct ResolvedMessageHashes {
 }
 
 impl ResolvedMessageHashes {
+    /// Convert to `MessageHashes` for API use.
+    ///
+    /// Combines Sapling and Orchard per‑proof hashes into a single map.
+    #[must_use]
+    pub fn to_message_hashes(&self) -> MessageHashes {
+        let mut combined = self.sapling.clone();
+        combined.append(&mut self.orchard.clone());
+        MessageHashes {
+            shared: self.shared,
+            per_proof: combined,
+        }
+    }
+
     /// Resolve Sapling message hash for a given nullifier.
     #[must_use]
     pub fn sapling_hash(&self, nullifier: Nullifier) -> Option<[u8; 32]> {
